@@ -51,14 +51,23 @@ function render() {
       <td class="r">${fmtTokens(total)}</td>
       <td class="r">${fmtCost(s)}</td>
       <td class="status-${s.status}">${s.status}</td>
-      <td>${s.stop_flag
+      <td class="actions">
+        <button class="btn msg" data-id="${s.id}">Msg</button>
+        ${s.stop_flag
           ? `<button class="btn resume" data-id="${s.id}" data-stop="0">Resume</button>`
-          : `<button class="btn stop" data-id="${s.id}" data-stop="1">Stop</button>`}</td>
+          : `<button class="btn stop" data-id="${s.id}" data-stop="1">Stop</button>`}
+      </td>
     </tr>`;
   }).join("");
 
-  for (const b of $rows.querySelectorAll(".btn")) {
+  for (const b of $rows.querySelectorAll(".btn.stop, .btn.resume")) {
     b.addEventListener("click", () => stopSession(b.dataset.id, b.dataset.stop === "1"));
+  }
+  for (const b of $rows.querySelectorAll(".btn.msg")) {
+    b.addEventListener("click", () => {
+      const m = prompt("Send a one-off message to this session (delivered on its next prompt):");
+      if (m) sendMessage(b.dataset.id, m);
+    });
   }
 
   let cost = 0, active = 0;
@@ -87,6 +96,43 @@ async function stopSession(id, stop) {
     });
   } catch (_) {}
 }
+
+async function sendMessage(id, message) {
+  try {
+    await fetch("/api/message", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: id, message }),
+    });
+  } catch (_) {}
+}
+
+async function loadRules() {
+  try {
+    const r = await fetch("/api/rules");
+    const v = await r.json();
+    if (v && Array.isArray(v.global)) {
+      document.getElementById("rules-text").value = v.global.join("\n");
+    }
+  } catch (_) {}
+}
+
+async function saveRules() {
+  const lines = document.getElementById("rules-text").value
+    .split("\n").map((s) => s.trim()).filter(Boolean);
+  try {
+    await fetch("/api/rules", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scope: "global", rules: lines }),
+    });
+    const st = document.getElementById("rules-status");
+    st.textContent = `${lines.length} rule${lines.length === 1 ? "" : "s"} saved`;
+    setTimeout(() => (st.textContent = ""), 2500);
+  } catch (_) {}
+}
+
+document.getElementById("save-rules").addEventListener("click", saveRules);
 
 async function setDayCap() {
   const v = parseFloat(document.getElementById("day-cap").value);
@@ -119,4 +165,5 @@ function connect() {
   };
 }
 
+loadRules();
 connect();

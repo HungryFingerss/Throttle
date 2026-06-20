@@ -289,6 +289,21 @@ func (t *Tracker) SetSessionCaps(id string, caps core.Caps) {
 	t.emit(Update{Kind: SessionUpdate, Session: snap})
 }
 
+// SetSessionRules writes the resolved rule list onto a live session for
+// dashboard display. No effect if the session is unknown.
+func (t *Tracker) SetSessionRules(id string, rules []string) {
+	t.mu.Lock()
+	s, ok := t.sessions[id]
+	if !ok {
+		t.mu.Unlock()
+		return
+	}
+	s.Rules = rules
+	snap := *s
+	t.mu.Unlock()
+	t.emit(Update{Kind: SessionUpdate, Session: snap})
+}
+
 // Get returns a copy of one session by id.
 func (t *Tracker) Get(id string) (core.Session, bool) {
 	t.mu.Lock()

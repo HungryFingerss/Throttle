@@ -9,7 +9,7 @@ Running build log. Newest entries on top.
 | Setup: repo + layout | ✅ done |
 | M1 — Live monitoring spine | ✅ done — unit + integration + sandbox smoke all green |
 | M2 — Kill-switch | ✅ done — cap enforce + real hook binary, sandbox E2E (deny/allow/fail-open) green |
-| M3 — Rules layer | ⬜ |
+| M3 — Rules layer | ✅ done — rules inject every turn + survive compaction; sandbox E2E green |
 | M4 — Codex adapter | ⬜ |
 | M5 — Gemini + Aider | ⬜ |
 | M6 — Installer | ⬜ |
@@ -54,6 +54,15 @@ Verified against 7 real rollouts + `~/.codex/auth.json`.
 - **No real Codex subagent log** exists on this machine (all `source:"cli"`). The 91× subagent-exclusion test uses a synthetic fixture built to the documented schema.
 
 ---
+
+## M3 — Rules/control layer — DONE (2026-06-20)
+Persistent rules injected every turn and re-injected after compaction (Claude's guaranteed channel), plus live one-off operator messages.
+- **`internal/rules`**: rule store (global ▷ tool ▷ session merge) + per-session one-off message queue + `InjectText` renderer (numbered, clearly delimited block).
+- **Enforcer** now also injects: `UserPromptSubmit` → rules + drained one-offs; `SessionStart[:compact]` → rules (re-injection that survives compaction). Injection works even for sessions the tracker hasn't seen yet (uses tool+session from the request). Tool-call events still run caps.
+- **API**: `/api/rules` (GET/POST global|tool|session) + `/api/message` (enqueue one-off).
+- **Dashboard**: global-rules textarea (one per line) + per-row "Msg" button (one-off send).
+- **Tests**: rules (merge order, isolation, one-off drain, inject format/empty); enforce (inject on prompt, **survive compaction via SessionStart:compact**, one-off delivered once, rule events never block on caps).
+- **Sandbox E2E** (`scripts/smoke-m3.ps1`): real hook — rules injected on `UserPromptSubmit`, re-injected on `SessionStart:compact`, one-off delivered exactly once. PASS.
 
 ## M2 — Kill-switch — DONE (2026-06-20)
 Hard caps that stop a run at the next tool boundary, plus stop/resume, warn threshold, fail-open.

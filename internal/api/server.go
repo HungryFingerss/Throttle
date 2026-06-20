@@ -21,6 +21,12 @@ type Controls interface {
 	SetToolCaps(core.ToolKind, core.Caps)
 	SetSessionCaps(string, core.Caps)
 	LimitsView() any
+
+	SetGlobalRules([]string)
+	SetToolRules(core.ToolKind, []string)
+	SetSessionRules(string, []string)
+	EnqueueMessage(sessionID, message string)
+	RulesView() any
 }
 
 // Server wires the tracker, the WS hub, the hook checker, and the web assets.
@@ -69,6 +75,8 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/v1/check", s.handleCheck)
 	mux.HandleFunc("/api/sessions", s.handleSessions)
 	mux.HandleFunc("/api/caps", s.handleCaps)
+	mux.HandleFunc("/api/rules", s.handleRules)
+	mux.HandleFunc("/api/message", s.handleMessage)
 	mux.HandleFunc("/api/stop", s.handleStop)
 	mux.HandleFunc("/api/health", s.handleHealth)
 	mux.HandleFunc("/ws", s.handleWS)
@@ -123,6 +131,64 @@ func (s *Server) handleCaps(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, s.controls.LimitsView())
+}
+
+type ruleRequest struct {
+	Scope     string        `json:"scope"` // "global" | "tool" | "session"
+	Tool      core.ToolKind `json:"tool"`
+	SessionID string        `json:"session_id"`
+	Rules     []string      `json:"rules"`
+}
+
+func (s *Server) handleRules(w http.ResponseWriter, r *http.Request) {
+	if s.controls == nil {
+		writeJSON(w, map[string]any{"error": "rules unavailable"})
+		return
+	}
+	if r.Method == http.MethodGet {
+		writeJSON(w, s.controls.RulesView())
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "GET or POST", http.StatusMethodNotAllowed)
+		return
+	}
+	var req ruleRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	switch req.Scope {
+	case "global":
+		s.controls.SetGlobalRules(req.Rules)
+	case "tool":
+		s.controls.SetToolRules(req.Tool, req.Rules)
+	case "session":
+		s.controls.SetSessionRules(req.SessionID, req.Rules)
+	default:
+		http.Error(w, "scope must be global|tool|session", http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, s.controls.RulesView())
+}
+
+type messageRequest struct {
+	SessionID string `json:"session_id"`
+	Message   string `json:"message"`
+}
+
+func (s *Server) handleMessage(w http.ResponseWriter, r *http.Request) {
+	if s.controls == nil || r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	var req messageRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	s.controls.EnqueueMessage(req.SessionID, req.Message)
+	writeJSON(w, map[string]any{"queued": true})
 }
 
 type stopRequest struct {

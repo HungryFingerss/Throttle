@@ -141,6 +141,60 @@ func TestPerSessionOverrideBeatsGlobal(t *testing.T) {
 	}
 }
 
+func TestRulesInjectedOnPrompt(t *testing.T) {
+	tr, id := makeSession(t, "S", 1)
+	e := enforce.New(tr)
+	e.SetGlobalRules([]string{"never force-push"})
+
+	r := e.Check(api.CheckRequest{Tool: core.ToolClaude, SessionID: id, Event: "UserPromptSubmit"})
+	if r.Decision != api.DecisionAllow {
+		t.Fatalf("prompt injection must allow, got %q", r.Decision)
+	}
+	if !strings.Contains(r.Inject, "never force-push") {
+		t.Fatalf("rules not injected: %q", r.Inject)
+	}
+}
+
+// The headline M3 claim: rules are re-injected after auto-compaction via the
+// SessionStart:compact hook (CLAUDE.md is not re-read after compaction).
+func TestRulesSurviveCompaction(t *testing.T) {
+	tr, id := makeSession(t, "S", 1)
+	e := enforce.New(tr)
+	e.SetGlobalRules([]string{"keep the public API stable"})
+
+	r := e.Check(api.CheckRequest{Tool: core.ToolClaude, SessionID: id, Event: "SessionStart:compact"})
+	if r.Decision != api.DecisionAllow || !strings.Contains(r.Inject, "keep the public API stable") {
+		t.Fatalf("rules must survive compaction: %q / %q", r.Decision, r.Inject)
+	}
+}
+
+func TestOneOffMessageDeliveredOnce(t *testing.T) {
+	tr, id := makeSession(t, "S", 1)
+	e := enforce.New(tr)
+	e.EnqueueMessage(id, "switch to the other branch")
+
+	r1 := e.Check(api.CheckRequest{Tool: core.ToolClaude, SessionID: id, Event: "UserPromptSubmit"})
+	if !strings.Contains(r1.Inject, "switch to the other branch") {
+		t.Fatalf("one-off not delivered: %q", r1.Inject)
+	}
+	r2 := e.Check(api.CheckRequest{Tool: core.ToolClaude, SessionID: id, Event: "UserPromptSubmit"})
+	if strings.Contains(r2.Inject, "switch to the other branch") {
+		t.Fatalf("one-off delivered twice: %q", r2.Inject)
+	}
+}
+
+func TestRuleEventsDoNotEnforceCaps(t *testing.T) {
+	// Even wildly over a cap, a prompt/session-start event injects and allows
+	// (caps fire at the tool-call boundary, not on prompts).
+	tr, id := makeSession(t, "S", 5) // $0.09
+	e := enforce.New(tr)
+	e.SetGlobalCaps(core.Caps{SessionUSD: 0.01})
+	r := e.Check(api.CheckRequest{Tool: core.ToolClaude, SessionID: id, Event: "UserPromptSubmit"})
+	if r.Decision != api.DecisionAllow {
+		t.Fatalf("prompt event must allow regardless of caps, got %q", r.Decision)
+	}
+}
+
 func TestDailyCapAggregates(t *testing.T) {
 	// One tracker, two sessions, $0.018 each = $0.036 today.
 	root := t.TempDir()

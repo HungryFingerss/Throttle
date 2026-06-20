@@ -95,3 +95,16 @@ tbody tr:hover { background: #1b1f27; }
   background: var(--accent); border: none; color: #06122b; font-weight: 600;
   border-radius: 6px; padding: 4px 10px; cursor: pointer;
 }
+
+.rules-bar { padding: 14px 24px; border-bottom: 1px solid var(--line); background: #13161d; }
+.rules-bar label { display: block; color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; margin-bottom: 6px; }
+.rules-row { display: flex; gap: 10px; align-items: flex-start; }
+.rules-bar textarea {
+  flex: 1; background: #0f1115; border: 1px solid var(--line); color: var(--text);
+  border-radius: 6px; padding: 8px 10px; font: 13px/1.4 ui-monospace, Consolas, monospace; resize: vertical;
+}
+#save-rules {
+  background: var(--accent); border: none; color: #06122b; font-weight: 600;
+  border-radius: 6px; padding: 8px 14px; cursor: pointer; white-space: nowrap;
+}
+.actions { display: flex; gap: 6px; }

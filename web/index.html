@@ -25,6 +25,15 @@
     </div>
   </header>
 
+  <section class="rules-bar">
+    <label for="rules-text">Global rules — one per line, injected every turn and re-injected after compaction</label>
+    <div class="rules-row">
+      <textarea id="rules-text" rows="2" placeholder="e.g. Never force-push to main&#10;Run the tests before saying done"></textarea>
+      <button id="save-rules">Save rules</button>
+      <span id="rules-status" class="cap-status"></span>
+    </div>
+  </section>
+
   <main>
     <table id="sessions">
       <thead>

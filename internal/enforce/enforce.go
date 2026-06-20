@@ -10,11 +10,13 @@ package enforce
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/jagannivas/throttle/internal/api"
 	"github.com/jagannivas/throttle/internal/core"
+	"github.com/jagannivas/throttle/internal/rules"
 	"github.com/jagannivas/throttle/internal/tally"
 )
 
@@ -25,11 +27,12 @@ type Limits struct {
 	PerSession map[string]core.Caps        `json:"per_session"`
 }
 
-// Enforcer is the live cap evaluator. Safe for concurrent use.
+// Enforcer is the live cap evaluator and rule injector. Safe for concurrent use.
 type Enforcer struct {
 	mu           sync.RWMutex
 	tracker      *tally.Tracker
 	limits       Limits
+	rules        *rules.Store
 	warnFraction float64
 	now          func() time.Time
 }
@@ -43,10 +46,14 @@ func New(tracker *tally.Tracker) *Enforcer {
 			PerTool:    map[core.ToolKind]core.Caps{},
 			PerSession: map[string]core.Caps{},
 		},
+		rules:        rules.New(),
 		warnFraction: 0.8,
 		now:          time.Now,
 	}
 }
+
+// Rules returns the rule store (for the API to read/update).
+func (e *Enforcer) Rules() *rules.Store { return e.rules }
 
 // SetClock overrides the clock (tests).
 func (e *Enforcer) SetClock(f func() time.Time) { e.now = f }
@@ -101,6 +108,23 @@ func (e *Enforcer) Limits() Limits {
 // api.Controls without creating an import cycle on the concrete type).
 func (e *Enforcer) LimitsView() any { return e.Limits() }
 
+// --- rule controls (delegate to the rule store; satisfy api.Controls) ---
+
+func (e *Enforcer) SetGlobalRules(r []string)               { e.rules.SetGlobal(r) }
+func (e *Enforcer) SetToolRules(t core.ToolKind, r []string) { e.rules.SetTool(t, r) }
+func (e *Enforcer) EnqueueMessage(id, msg string)            { e.rules.Enqueue(id, msg) }
+func (e *Enforcer) RulesView() any                          { return e.rules.View() }
+
+// SetSessionRules sets a session's rules and reflects them onto the live
+// session for dashboard display.
+func (e *Enforcer) SetSessionRules(id string, r []string) {
+	e.rules.SetSession(id, r)
+	if s, ok := e.tracker.Get(id); ok {
+		s.Rules = e.rules.RulesFor(s.Tool, id)
+		e.tracker.SetSessionRules(id, s.Rules)
+	}
+}
+
 // sessionCaps resolves the effective per-session caps: per-session override wins
 // over per-tool, which wins over global, field by field (a non-zero value at a
 // more specific scope overrides a broader one).
@@ -133,8 +157,24 @@ func mergeCaps(base, over core.Caps) core.Caps {
 	return base
 }
 
-// Check implements api.Checker. Order: manual stop → over-cap deny → warn → allow.
+// Check implements api.Checker. Rule-injection events (UserPromptSubmit,
+// SessionStart[:compact]) return the rules to inject and never block; tool-call
+// events (PreToolUse) run the cap/kill logic. Order for tool calls: manual stop
+// → over-cap deny → warn → allow.
 func (e *Enforcer) Check(req api.CheckRequest) api.CheckResponse {
+	// --- rule injection (works even for sessions not yet in the tracker) ---
+	if strings.HasPrefix(req.Event, "UserPromptSubmit") {
+		r := e.rules.RulesFor(req.Tool, req.SessionID)
+		oneOff := e.rules.DrainOneOff(req.SessionID)
+		return api.CheckResponse{Decision: api.DecisionAllow, Inject: rules.InjectText(r, oneOff)}
+	}
+	if strings.HasPrefix(req.Event, "SessionStart") {
+		// Re-inject rules after compaction / on resume. Do NOT drain one-offs
+		// here (those belong to a real prompt turn).
+		r := e.rules.RulesFor(req.Tool, req.SessionID)
+		return api.CheckResponse{Decision: api.DecisionAllow, Inject: rules.InjectText(r, nil)}
+	}
+
 	s, ok := e.tracker.Get(req.SessionID)
 	if !ok {
 		// Unknown session: we have no spend basis → fail-open.
