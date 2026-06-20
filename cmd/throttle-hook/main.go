@@ -81,14 +81,14 @@ func main() {
 		os.Exit(0) // daemon unreachable → fail-open
 	}
 
-	out := render(in.HookEventName, resp)
+	out := render(*tool, in.HookEventName, resp)
 	if out.stdout != "" {
 		os.Stdout.WriteString(out.stdout)
 	}
 	if out.stderr != "" {
 		fmt.Fprintln(os.Stderr, out.stderr)
 	}
-	os.Exit(0)
+	os.Exit(out.exitCode)
 }
 
 func callDaemon(addr string, timeout time.Duration, req checkRequest) (checkResponse, bool) {
@@ -119,15 +119,23 @@ func callDaemon(addr string, timeout time.Duration, req checkRequest) (checkResp
 }
 
 type renderOutput struct {
-	stdout string
-	stderr string
+	stdout   string
+	stderr   string
+	exitCode int
 }
 
 // render translates the daemon decision into the tool's native hook output as
-// strings (no side effects), so the full matrix is unit-testable. Only Claude
-// Code's format is produced here (the only tool wired to this binary in M2/M3);
-// Codex translation is added with the Codex hooks.
-func render(eventName string, resp checkResponse) renderOutput {
+// strings (no side effects), so the full matrix is unit-testable.
+func render(tool, eventName string, resp checkResponse) renderOutput {
+	if tool == "codex" {
+		return renderCodex(eventName, resp)
+	}
+	return renderClaude(eventName, resp)
+}
+
+// renderClaude uses Claude Code's JSON hook output (deny via permissionDecision,
+// inject via additionalContext); exit code stays 0 (the JSON drives behavior).
+func renderClaude(eventName string, resp checkResponse) renderOutput {
 	switch eventName {
 	case "PreToolUse":
 		if resp.Decision == "deny" {
@@ -146,6 +154,27 @@ func render(eventName string, resp checkResponse) renderOutput {
 	case "SessionStart":
 		if resp.Inject != "" {
 			return renderOutput{stdout: claudeJSON("SessionStart", map[string]any{"additionalContext": resp.Inject})}
+		}
+	}
+	return renderOutput{}
+}
+
+// renderCodex uses Codex's hook conventions: exit code 2 blocks a tool call;
+// injection is returned as additionalContext JSON. (Codex's exact inject schema
+// is [verify]; exit-2 blocking is the reliable cap mechanism.)
+func renderCodex(eventName string, resp checkResponse) renderOutput {
+	switch eventName {
+	case "PreToolUse":
+		if resp.Decision == "deny" {
+			return renderOutput{stderr: "Throttle: " + orDefault(resp.Reason, "cap reached"), exitCode: 2}
+		}
+		if resp.Reason != "" {
+			return renderOutput{stderr: "Throttle: " + resp.Reason}
+		}
+	case "UserPromptSubmit", "SessionStart":
+		if resp.Inject != "" {
+			b, _ := json.Marshal(map[string]any{"additionalContext": resp.Inject})
+			return renderOutput{stdout: string(b)}
 		}
 	}
 	return renderOutput{}

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/jagannivas/throttle/internal/adapters/claude"
+	"github.com/jagannivas/throttle/internal/adapters/codex"
 	"github.com/jagannivas/throttle/internal/api"
 	"github.com/jagannivas/throttle/internal/config"
 	"github.com/jagannivas/throttle/internal/core"
@@ -51,8 +52,8 @@ func main() {
 		}
 	}()
 
-	// --- adapters (M1: Claude only; more wired in later milestones).
-	adapters := []core.Adapter{claude.New()}
+	// --- adapters (Claude + Codex; Gemini/Aider wired in M5).
+	adapters := []core.Adapter{claude.New(), codex.New()}
 
 	// --- tracker + restore persisted offsets.
 	tracker := tally.New(priceTable, adapters)

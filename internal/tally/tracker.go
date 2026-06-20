@@ -151,14 +151,21 @@ func (t *Tracker) HandlePath(path string) {
 			}
 			seen[ev.DedupKey] = struct{}{}
 		}
+		// Model attribution: prefer the event's model; fall back to the
+		// session's last-known model when an incremental pass (or a post-restart
+		// resume) reads a usage line without a preceding model marker.
+		model := ev.Model
+		if model == "" {
+			model = s.Model
+		}
 		s.Tokens = s.Tokens.Add(ev.Tokens)
-		cost, est := t.prices.Cost(ev.Tokens, ev.Model)
+		cost, est := t.prices.Cost(ev.Tokens, model)
 		s.CostUSD += cost
 		if est {
 			s.Estimated = true
 		}
-		if ev.Model != "" {
-			s.Model = ev.Model
+		if model != "" {
+			s.Model = model
 		}
 	}
 

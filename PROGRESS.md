@@ -10,7 +10,7 @@ Running build log. Newest entries on top.
 | M1 — Live monitoring spine | ✅ done — unit + integration + sandbox smoke all green |
 | M2 — Kill-switch | ✅ done — cap enforce + real hook binary, sandbox E2E (deny/allow/fail-open) green |
 | M3 — Rules layer | ✅ done — rules inject every turn + survive compaction; sandbox E2E green |
-| M4 — Codex adapter | ⬜ |
+| M4 — Codex adapter | ✅ done — dedup + subagent-exclude + per-turn model + subscription detect; real-log validated; sandbox E2E green |
 | M5 — Gemini + Aider | ⬜ |
 | M6 — Installer | ⬜ |
 | M7 — Polish + HOW-TO-TEST | ⬜ |
@@ -54,6 +54,16 @@ Verified against 7 real rollouts + `~/.codex/auth.json`.
 - **No real Codex subagent log** exists on this machine (all `source:"cli"`). The 91× subagent-exclusion test uses a synthetic fixture built to the documented schema.
 
 ---
+
+## M4 — Codex adapter — DONE (2026-06-20)
+The hardest accounting, all traps handled and tested.
+- **`internal/adapters/codex`**: incremental rollout parser. Normalizes Codex token semantics (input_tokens INCLUDES cached → Input = input−cached, CacheRead = cached; reasoning_output_tokens recorded as Reasoning, already inside Output). Per-turn model from `turn_context.model` (most recent), with the tracker's last-known-model fallback covering incremental/restart gaps. Dedup key = timestamp + last_token_usage. `token_count.info==null` skipped. `compacted` event tags the next token_count.
+- **Subagent exclusion (91× trap)**: `session_meta.source` as an OBJECT (vs string `"cli"`) marks a subagent → excluded from totals AND rows. Test proves a ~2M-token subagent replay leaks nothing.
+- **Subscription detection**: `~/.codex/auth.json` → `auth_mode=="chatgpt"` ⇒ subscription (this machine), OPENAI_API_KEY/apikey ⇒ API.
+- **Hook**: `cmd/throttle-hook` now tool-aware — Codex deny → exit code 2; inject → `additionalContext` JSON (Codex inject schema [verify]; exit-2 cap is reliable).
+- **Real-log validation**: env-gated `TestRealCodexLogSanity` parsed an actual rollout on this machine (56 events, 5.88M tokens, no crash, non-negative). Real logs are NOT committed (privacy).
+- **Tests**: adapter (parse, dedup keys, normalization, compaction tag, subagent meta, SessionFileID, DetectMode), full accounting + subagent exclusion via the tracker, hook render matrix (Claude + Codex).
+- **Sandbox E2E** (`scripts/smoke-m4.ps1`): daemon discovered a Codex rollout in a sandbox `CODEX_HOME`, mode=subscription, model=gpt-5-mini, cost=$0.00322125; subagent dropped in → still 1 row, no token leak. PASS.
 
 ## M3 — Rules/control layer — DONE (2026-06-20)
 Persistent rules injected every turn and re-injected after compaction (Claude's guaranteed channel), plus live one-off operator messages.
