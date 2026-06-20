@@ -35,6 +35,7 @@ type Tracker struct {
 	adapters []core.Adapter
 	sessions map[string]*core.Session
 	seen     map[string]map[string]struct{} // sessionID -> dedup keys
+	offsets  map[string]int64               // file path -> byte offset (per FILE)
 	modeByTool map[core.ToolKind]core.Mode
 
 	idleAfter time.Duration
@@ -49,6 +50,7 @@ func New(p *prices.Table, adapters []core.Adapter) *Tracker {
 		adapters:   adapters,
 		sessions:   map[string]*core.Session{},
 		seen:       map[string]map[string]struct{}{},
+		offsets:    map[string]int64{},
 		modeByTool: map[core.ToolKind]core.Mode{},
 		idleAfter:  90 * time.Second,
 		now:        time.Now,
@@ -87,105 +89,147 @@ func (t *Tracker) modeFor(a core.Adapter) core.Mode {
 }
 
 // HandlePath processes one file change. It is fail-soft: any parse/IO error
-// leaves existing state intact and simply returns. Returns the resulting
-// update kind (or empty string if nothing was emitted).
+// leaves existing state intact and simply returns. Byte offsets are tracked per
+// FILE; events are routed to a session by their SessionID (or the file's
+// primary id for one-file-per-session tools).
 func (t *Tracker) HandlePath(path string) {
-	a, id, ok := t.match(path)
+	a, fileID, ok := t.match(path)
 	if !ok {
 		return
 	}
 
 	t.mu.Lock()
-	s, exists := t.sessions[id]
-	isNew := false
-	if !exists {
-		s = &core.Session{
-			ID:        id,
-			Tool:      a.Tool(),
-			FilePath:  path,
-			Status:    core.StatusActive,
-			StartedAt: t.now(),
-			LastSeen:  t.now(),
-		}
-		t.sessions[id] = s
-		t.seen[id] = map[string]struct{}{}
-		isNew = true
-	}
 
-	res, err := a.Parse(path, s.ByteOffset)
+	res, err := a.Parse(path, t.offsets[path])
 	if err != nil {
 		t.mu.Unlock()
 		return // fail-soft: don't corrupt offset/state on a bad read
 	}
+	t.offsets[path] = res.NewOffset
 
+	touched := map[string]bool{} // id -> isNew
+	ensure := func(id string) *core.Session {
+		s, exists := t.sessions[id]
+		if !exists {
+			s = &core.Session{
+				ID: id, Tool: a.Tool(), FilePath: path,
+				Status: core.StatusActive, StartedAt: t.now(), LastSeen: t.now(),
+			}
+			t.sessions[id] = s
+			t.seen[id] = map[string]struct{}{}
+			touched[id] = true
+		} else if _, ok := touched[id]; !ok {
+			touched[id] = false
+		}
+		return s
+	}
+
+	// File-level metadata applies to the primary (file) session — but only for
+	// one-file-per-session tools that actually report it. Multi-session files
+	// (Gemini) report no Meta; their sessions are created from event SessionIDs
+	// so the file never spawns an empty placeholder row.
+	var primary *core.Session
 	if res.Meta.Found {
+		primary = ensure(fileID)
+		primary.ByteOffset = res.NewOffset
 		if res.Meta.ProjectPath != "" {
-			s.ProjectPath = res.Meta.ProjectPath
+			primary.ProjectPath = res.Meta.ProjectPath
 		}
 		if res.Meta.IsSubagent {
-			s.IsSubagent = true
-			s.ParentID = res.Meta.ParentID
+			primary.IsSubagent = true
+			primary.ParentID = res.Meta.ParentID
 		}
 		if !res.Meta.StartedAt.IsZero() {
-			s.StartedAt = res.Meta.StartedAt
+			primary.StartedAt = res.Meta.StartedAt
 		}
+		if primary.Mode == "" || primary.Mode == core.ModeUnknown {
+			primary.Mode = t.modeFor(a)
+		}
+	}
+
+	for _, ev := range res.Events {
+		id := ev.SessionID
+		if id == "" {
+			id = fileID
+		}
+		s := ensure(id)
+		s.ByteOffset = res.NewOffset
 		if s.Mode == "" || s.Mode == core.ModeUnknown {
 			s.Mode = t.modeFor(a)
 		}
-	}
+		if ev.ProjectPath != "" {
+			s.ProjectPath = ev.ProjectPath
+		}
 
-	s.ByteOffset = res.NewOffset
-
-	// Subagent sessions are a replay of parent history (the Codex 91× trap):
-	// never count their tokens and never surface them as a row.
-	if s.IsSubagent {
-		t.mu.Unlock()
-		return
-	}
-
-	seen := t.seen[id]
-	for _, ev := range res.Events {
+		// Subagent sessions replay parent history (Codex 91× trap): never count.
+		if s.IsSubagent {
+			continue
+		}
 		if ev.DedupKey != "" {
-			if _, dup := seen[ev.DedupKey]; dup {
+			if _, dup := t.seen[id][ev.DedupKey]; dup {
 				continue
 			}
-			seen[ev.DedupKey] = struct{}{}
+			t.seen[id][ev.DedupKey] = struct{}{}
 		}
+
 		// Model attribution: prefer the event's model; fall back to the
-		// session's last-known model when an incremental pass (or a post-restart
-		// resume) reads a usage line without a preceding model marker.
+		// session's last-known model across incremental passes / restarts.
 		model := ev.Model
 		if model == "" {
 			model = s.Model
 		}
 		s.Tokens = s.Tokens.Add(ev.Tokens)
-		cost, est := t.prices.Cost(ev.Tokens, model)
-		s.CostUSD += cost
-		if est {
-			s.Estimated = true
+		if ev.HasCostOverride {
+			s.CostUSD += ev.CostOverride // adapter supplied cost (e.g. Aider)
+		} else {
+			cost, est := t.prices.Cost(ev.Tokens, model)
+			s.CostUSD += cost
+			if est {
+				s.Estimated = true
+			}
 		}
 		if model != "" {
 			s.Model = model
 		}
+		if !ev.Timestamp.IsZero() {
+			s.LastSeen = ev.Timestamp
+		}
+		if s.Status != core.StatusStopped {
+			s.Status = core.StatusActive
+		}
 	}
 
-	if !res.LastEvent.IsZero() {
-		s.LastSeen = res.LastEvent
-	} else {
-		s.LastSeen = t.now()
-	}
-	if s.Status != core.StatusStopped {
-		s.Status = core.StatusActive
+	// If the file changed but produced no usage line, still bump the primary's
+	// liveness so it reads as active (single-session tools only).
+	if primary != nil && res.LastEvent.IsZero() && !primary.IsSubagent {
+		primary.LastSeen = t.now()
+		if primary.Status != core.StatusStopped {
+			primary.Status = core.StatusActive
+		}
 	}
 
-	snap := *s
+	// Snapshot touched, non-subagent sessions while still holding the lock.
+	type out struct {
+		s     core.Session
+		isNew bool
+	}
+	var outs []out
+	for id, isNew := range touched {
+		s := t.sessions[id]
+		if s == nil || s.IsSubagent {
+			continue
+		}
+		outs = append(outs, out{*s, isNew})
+	}
 	t.mu.Unlock()
 
-	kind := SessionUpdate
-	if isNew {
-		kind = SessionNew
+	for _, o := range outs {
+		kind := SessionUpdate
+		if o.isNew {
+			kind = SessionNew
+		}
+		t.emit(Update{Kind: kind, Session: o.s})
 	}
-	t.emit(Update{Kind: kind, Session: snap})
 }
 
 // SweepIdle marks active sessions idle when they have not been written within
@@ -256,6 +300,10 @@ func (t *Tracker) Import(sessions []core.Session) {
 		cp := s
 		t.sessions[s.ID] = &cp
 		t.seen[s.ID] = map[string]struct{}{}
+		// Restore the per-file offset so resumed reads start where we left off.
+		if s.FilePath != "" && s.ByteOffset > t.offsets[s.FilePath] {
+			t.offsets[s.FilePath] = s.ByteOffset
+		}
 	}
 }
 

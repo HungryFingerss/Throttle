@@ -1,0 +1,51 @@
+{
+  "timestamp": "2026-06-20T10:00:00.000Z",
+  "event.name": "gemini_cli.api_request",
+  "attributes": {
+    "event.name": "gemini_cli.api_request",
+    "model": "gemini-2.5-pro",
+    "session.id": "sess-A"
+  }
+}
+{
+  "timestamp": "2026-06-20T10:00:01.000Z",
+  "event.name": "gemini_cli.api_response",
+  "attributes": {
+    "event.name": "gemini_cli.api_response",
+    "model": "gemini-2.5-pro",
+    "session.id": "sess-A",
+    "input_token_count": 1000,
+    "output_token_count": 500,
+    "cached_content_token_count": 200,
+    "thoughts_token_count": 100,
+    "total_token_count": 1600
+  }
+}
+{
+  "timestamp": "2026-06-20T10:00:05.000Z",
+  "event.name": "gemini_cli.api_response",
+  "attributes": {
+    "event.name": "gemini_cli.api_response",
+    "model": "gemini-2.5-pro",
+    "session.id": "sess-A",
+    "input_token_count": 100,
+    "output_token_count": 50,
+    "cached_content_token_count": 0,
+    "thoughts_token_count": 0,
+    "total_token_count": 150
+  }
+}
+{
+  "timestamp": "2026-06-20T10:01:00.000Z",
+  "event.name": "gemini_cli.api_response",
+  "attributes": {
+    "event.name": "gemini_cli.api_response",
+    "model": "gemini-2.5-flash",
+    "session.id": "sess-B",
+    "input_token_count": 2000,
+    "output_token_count": 1000,
+    "cached_content_token_count": 0,
+    "thoughts_token_count": 0,
+    "total_token_count": 3000
+  }
+}

@@ -11,7 +11,7 @@ Running build log. Newest entries on top.
 | M2 — Kill-switch | ✅ done — cap enforce + real hook binary, sandbox E2E (deny/allow/fail-open) green |
 | M3 — Rules layer | ✅ done — rules inject every turn + survive compaction; sandbox E2E green |
 | M4 — Codex adapter | ✅ done — dedup + subagent-exclude + per-turn model + subscription detect; real-log validated; sandbox E2E green |
-| M5 — Gemini + Aider | ⬜ |
+| M5 — Gemini + Aider | ✅ done — Aider cost-from-file, Gemini OTel multi-session demux; honest capability flags; sandbox E2E green |
 | M6 — Installer | ⬜ |
 | M7 — Polish + HOW-TO-TEST | ⬜ |
 
@@ -54,6 +54,15 @@ Verified against 7 real rollouts + `~/.codex/auth.json`.
 - **No real Codex subagent log** exists on this machine (all `source:"cli"`). The 91× subagent-exclusion test uses a synthetic fixture built to the documented schema.
 
 ---
+
+## M5 — Gemini + Aider adapters — DONE (2026-06-20)
+Honest "monitor + best-effort" per the research's capability gradient. Formats VERIFIED from official docs + the gemini-cli usage-analyzer (no real Gemini/Aider token logs exist on this machine — Aider absent, Gemini telemetry off-by-default — so fixtures are documentation-derived, clearly labeled; not invented).
+- **`internal/adapters/aider`**: parses `.aider.chat.history.md` lines (`Tokens: 2.8k sent, 27 received. Cost: $0.0029 message …`). Takes per-message tokens AND the dollar cost directly from the file (new `UsageEvent.CostOverride` — no pricing guesswork). No central log → projects opt in via `THROTTLE_AIDER_DIRS`. No hooks → process-kill; rules via CONVENTIONS.md.
+- **`internal/adapters/gemini`**: streams the OTel `telemetry.log` (concatenated JSON, parsed with `json.Decoder`; truncated-tail safe). One file holds MANY sessions → events carry `SessionID` and the tracker demuxes. Strong capability is rules via GEMINI.md (re-sent every prompt → survives compaction). Monitoring needs telemetry enabled (off by default).
+- **Architecture**: tracker now tracks byte offsets **per file** and routes events to sessions by `UsageEvent.SessionID` (empty → file's primary session). Multi-session files never spawn an empty placeholder row. Single-session behavior (Claude/Codex/Aider) unchanged — all prior tests still green.
+- **Capabilities**: every adapter reports `core.Capabilities` (monitor confidence, hard-cap, live-inject, rules-survive-compaction, stop mechanism, honesty note). New `/api/capabilities` endpoint; dashboard shows a per-tool tooltip + a `*` on best-effort tools. Never promises a capability a tool can't back.
+- **Tests**: aider (parse, cost-from-file, full accounting, SessionFileID), gemini (parse, multi-session demux, truncated-tail, no-placeholder).
+- **Sandbox E2E** (`scripts/smoke-m5.ps1`, full sandbox via USERPROFILE redirect): `/api/capabilities` lists all 4 tools with correct gradient; Gemini telemetry demuxed into sess-A ($0.0066875) + sess-B ($0.0031) with no placeholder; Aider history priced $0.0129. PASS.
 
 ## M4 — Codex adapter — DONE (2026-06-20)
 The hardest accounting, all traps handled and tested.

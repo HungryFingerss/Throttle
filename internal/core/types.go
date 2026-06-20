@@ -89,6 +89,19 @@ type UsageEvent struct {
 	DedupKey     string    // stable key to drop duplicate log lines
 	Timestamp    time.Time // event time (for idle detection / ordering)
 	IsCompaction bool      // tag compaction spikes; do not alarm on these
+
+	// SessionID/ProjectPath let a single log file carry events for MULTIPLE
+	// sessions (e.g. Gemini's one telemetry.log). When SessionID is empty the
+	// event belongs to the file's primary session (the one-file-per-session
+	// case: Claude, Codex, Aider).
+	SessionID   string
+	ProjectPath string
+
+	// CostOverride lets an adapter supply the dollar cost directly (e.g. Aider
+	// prints "Cost: $X" in its history) instead of having the daemon price the
+	// tokens. Used only when HasCostOverride is true.
+	CostOverride    float64
+	HasCostOverride bool
 }
 
 // SessionMeta is the per-session metadata an adapter discovers (usually from

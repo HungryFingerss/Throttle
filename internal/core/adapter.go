@@ -30,4 +30,19 @@ type Adapter interface {
 	// DetectMode returns the current billing mode for this tool, read from its
 	// auth file (not the session log). May change between sessions.
 	DetectMode() Mode
+
+	// Capabilities reports, honestly, what Throttle can do for this tool — so
+	// the dashboard never implies a capability a tool can't back.
+	Capabilities() Capabilities
+}
+
+// Capabilities is the honest per-tool capability gradient (THROTTLE-RESEARCH §1).
+type Capabilities struct {
+	Monitor                bool   `json:"monitor"`                  // live spend tracking
+	HardCap                bool   `json:"hard_cap"`                 // block at a boundary via a hook
+	LiveInject             bool   `json:"live_inject"`              // push context into a running session
+	RulesSurviveCompaction bool   `json:"rules_survive_compaction"` // rules persist past compaction
+	StopMechanism          string `json:"stop_mechanism"`           // "hook" | "process-kill"
+	MonitorConfidence      string `json:"monitor_confidence"`       // "exact" | "best-effort"
+	Note                   string `json:"note,omitempty"`           // honesty caveat for the UI
 }

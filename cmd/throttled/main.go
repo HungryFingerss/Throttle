@@ -14,8 +14,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jagannivas/throttle/internal/adapters/aider"
 	"github.com/jagannivas/throttle/internal/adapters/claude"
 	"github.com/jagannivas/throttle/internal/adapters/codex"
+	"github.com/jagannivas/throttle/internal/adapters/gemini"
 	"github.com/jagannivas/throttle/internal/api"
 	"github.com/jagannivas/throttle/internal/config"
 	"github.com/jagannivas/throttle/internal/core"
@@ -52,8 +54,12 @@ func main() {
 		}
 	}()
 
-	// --- adapters (Claude + Codex; Gemini/Aider wired in M5).
-	adapters := []core.Adapter{claude.New(), codex.New()}
+	// --- adapters: Claude + Codex (exact), Gemini + Aider (monitor/best-effort).
+	adapters := []core.Adapter{claude.New(), codex.New(), gemini.New(), aider.New()}
+	capabilities := map[core.ToolKind]core.Capabilities{}
+	for _, ad := range adapters {
+		capabilities[ad.Tool()] = ad.Capabilities()
+	}
 
 	// --- tracker + restore persisted offsets.
 	tracker := tally.New(priceTable, adapters)
@@ -70,6 +76,7 @@ func main() {
 	// --- api server; tracker pushes updates to the dashboard via the sink.
 	srv := api.New(tracker, enforcer, web.FS())
 	srv.SetControls(enforcer)
+	srv.SetCapabilities(capabilities)
 	tracker.SetSink(srv.Broadcast)
 
 	// --- watcher: instant discovery + live tailing, no polling.

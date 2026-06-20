@@ -37,10 +37,14 @@ type Server struct {
 	hub      *hub
 	upgrader websocket.Upgrader
 	web      fs.FS
+	caps     any
 }
 
 // SetControls attaches the cap-management surface (enforcer).
 func (s *Server) SetControls(c Controls) { s.controls = c }
+
+// SetCapabilities attaches the per-tool capability map (for honest UI).
+func (s *Server) SetCapabilities(v any) { s.caps = v }
 
 // New builds the API server. webFS may be nil (then the dashboard route 404s).
 func New(tr *tally.Tracker, checker Checker, webFS fs.FS) *Server {
@@ -78,12 +82,21 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/rules", s.handleRules)
 	mux.HandleFunc("/api/message", s.handleMessage)
 	mux.HandleFunc("/api/stop", s.handleStop)
+	mux.HandleFunc("/api/capabilities", s.handleCapabilities)
 	mux.HandleFunc("/api/health", s.handleHealth)
 	mux.HandleFunc("/ws", s.handleWS)
 	if s.web != nil {
 		mux.Handle("/", http.FileServer(http.FS(s.web)))
 	}
 	return mux
+}
+
+func (s *Server) handleCapabilities(w http.ResponseWriter, r *http.Request) {
+	if s.caps == nil {
+		writeJSON(w, map[string]any{})
+		return
+	}
+	writeJSON(w, s.caps)
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {

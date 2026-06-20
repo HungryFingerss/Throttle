@@ -41,6 +41,19 @@ func (a *Adapter) Tool() core.ToolKind { return core.ToolClaude }
 
 func (a *Adapter) Roots() []string { return []string{a.root} }
 
+// Capabilities: Claude is the strongest tool — exact monitoring, blocking hook
+// caps, live injection, and rules guaranteed to survive compaction.
+func (a *Adapter) Capabilities() core.Capabilities {
+	return core.Capabilities{
+		Monitor:                true,
+		HardCap:                true,
+		LiveInject:             true,
+		RulesSurviveCompaction: true,
+		StopMechanism:          "hook",
+		MonitorConfidence:      "exact",
+	}
+}
+
 // SessionFileID accepts only top-level session files: <root>/<encoded>/<uuid>.jsonl.
 // Anything deeper (e.g. .../<session>/subagents/...) is ignored.
 func (a *Adapter) SessionFileID(path string) (string, bool) {

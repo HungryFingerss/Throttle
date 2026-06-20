@@ -1,5 +1,23 @@
 // Throttle dashboard: subscribe to /ws, render one row per live session.
 const rows = new Map(); // sessionId -> session
+let caps = {};          // tool -> capabilities
+
+function capTitle(tool) {
+  const c = caps[tool];
+  if (!c) return "";
+  const bits = [
+    `monitor: ${c.monitor_confidence || (c.monitor ? "yes" : "no")}`,
+    `hard cap: ${c.hard_cap ? "yes (hook)" : "no (process-kill)"}`,
+    `rules survive compaction: ${c.rules_survive_compaction ? "yes" : "no"}`,
+  ];
+  if (c.note) bits.push(c.note);
+  return bits.join(" · ");
+}
+
+function capMark(tool) {
+  const c = caps[tool];
+  return c && c.monitor_confidence === "best-effort" ? "*" : "";
+}
 
 const $rows = document.getElementById("rows");
 const $empty = document.getElementById("empty");
@@ -41,7 +59,7 @@ function render() {
     const total = (t.in || 0) + (t.out || 0) + (t.cache_read || 0) + (t.cache_creation || 0);
     const cache = (t.cache_read || 0) + (t.cache_creation || 0);
     return `<tr>
-      <td><span class="badge tool-${s.tool}">${s.tool}</span></td>
+      <td><span class="badge tool-${s.tool}" title="${capTitle(s.tool)}">${s.tool}${capMark(s.tool)}</span></td>
       <td class="path" title="${s.project_path || ""}">${shortPath(s.project_path)}</td>
       <td class="model">${s.model || "—"}</td>
       <td>${s.mode || "—"}</td>
@@ -165,5 +183,12 @@ function connect() {
   };
 }
 
+async function loadCaps() {
+  try {
+    caps = await (await fetch("/api/capabilities")).json();
+  } catch (_) {}
+}
+
+loadCaps();
 loadRules();
 connect();

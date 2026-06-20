@@ -48,6 +48,21 @@ func NewWithPaths(root, authPath string) *Adapter {
 func (a *Adapter) Tool() core.ToolKind { return core.ToolCodex }
 func (a *Adapter) Roots() []string     { return []string{a.root} }
 
+// Capabilities: Codex has exact monitoring and a blocking pre-tool hook (cap),
+// but live injection and compaction-persistence are partial (PreCompact/Stop
+// workarounds, not a native re-injection channel).
+func (a *Adapter) Capabilities() core.Capabilities {
+	return core.Capabilities{
+		Monitor:                true,
+		HardCap:                true,
+		LiveInject:             false,
+		RulesSurviveCompaction: false,
+		StopMechanism:          "hook",
+		MonitorConfidence:      "exact",
+		Note:                   "rules via AGENTS.md; post-compaction re-injection is best-effort",
+	}
+}
+
 // SessionFileID accepts rollout-*.jsonl files anywhere under the sessions root
 // (the YYYY/MM/DD nesting is arbitrary depth). The id is the trailing UUID of
 // the filename, which is stable per session.
