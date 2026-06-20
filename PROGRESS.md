@@ -13,7 +13,9 @@ Running build log. Newest entries on top.
 | M4 — Codex adapter | ✅ done — dedup + subagent-exclude + per-turn model + subscription detect; real-log validated; sandbox E2E green |
 | M5 — Gemini + Aider | ✅ done — Aider cost-from-file, Gemini OTel multi-session demux; honest capability flags; sandbox E2E green |
 | M6 — Installer | ✅ done — npx throttle init/uninstall, hook wiring (surgical), daemon service, 6-target cross-build; node tests + sandbox E2E green |
-| M7 — Polish + HOW-TO-TEST | 🔵 in progress |
+| M7 — Polish + HOW-TO-TEST | ✅ done — subscription quota (Codex rate_limits), /api/summary, HOW-TO-TEST.md, README, one-command test-all; **ALL GREEN** |
+
+**PRODUCT COMPLETE** — every Definition-of-Done item met (see bottom). `scripts\test-all.ps1` → ALL GREEN (Go + Node + 6 sandboxed milestone smokes).
 
 ---
 
@@ -54,6 +56,25 @@ Verified against 7 real rollouts + `~/.codex/auth.json`.
 - **No real Codex subagent log** exists on this machine (all `source:"cli"`). The 91× subagent-exclusion test uses a synthetic fixture built to the documented schema.
 
 ---
+
+## M7 — Polish + HOW-TO-TEST — DONE (2026-06-21)
+- **Subscription quota view**: Codex `rate_limits.primary` (`used_percent`, `window_minutes`, `resets_at`) — VERIFIED from a real rollout — surfaced as `QuotaUsed`/`QuotaRemaining`; dashboard shows "N% quota" for subscription sessions. Parsed even on rate-limit-only (`info:null`) token_count events.
+- **`/api/summary`**: rolls live sessions up by tool and by model (cost + tokens + count) — the lightweight "where's the spend" view.
+- **Deterministic-pricing flag** (`THROTTLE_NO_PRICE_REFRESH`): pins the daemon to the embedded fallback table so sandbox tests assert exact dollars; real installs still fetch live LiteLLM. (This was the cause of the only smoke flake — live opus-4-8 priced differently than the fallback; not a product bug.)
+- **`HOW-TO-TEST.md`**: step-by-step sandbox verification of every capability, never touching real config. **`README.md`**: overview + honest capability matrix.
+- **`scripts/test-all.ps1`**: one command runs Go tests + Node installer tests + all 6 sandboxed smokes, each in an isolated child shell. → **ALL GREEN.**
+- Removed transient debug scripts; kept schema-verification tools (`inspect-*`, `scan-*`) as provenance.
+
+### Definition of Done — all met
+- ✅ Builds on Windows + cross-compiles (win/mac/linux × amd64/arm64, 12 binaries).
+- ✅ Adapters pass tests against real fixtures (Claude+Codex real-schema; Codex validated against a real on-machine log; Gemini/Aider doc-derived, labeled).
+- ✅ Dashboard shows live sessions ms-accurately (fsnotify→tracker→WebSocket E2E).
+- ✅ Caps stop real runs (PreToolUse deny; sandbox E2E).
+- ✅ Rules survive compaction on Claude (SessionStart:compact re-injection; sandbox E2E).
+- ✅ Installer wires + unwires cleanly (surgical hooks; sandbox E2E).
+- ✅ Fail-open verified (daemon down → hook exits 0 silent).
+- ✅ Whole thing E2E-tested in a sandbox **without ever touching the user's real agent config**.
+- ✅ `HOW-TO-TEST.md` written.
 
 ## M6 — Installer + packaging — DONE (2026-06-20)
 `npx throttle` CLI (Node) that wires everything and reverses cleanly. Writes to real configs, so it is fully sandbox-aware and was tested ONLY against temp dirs.

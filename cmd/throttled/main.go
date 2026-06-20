@@ -44,15 +44,19 @@ func main() {
 	// --- prices: embedded fallback, overlaid with cache, refreshed in background.
 	priceTable := prices.LoadCached(config.PriceCachePath())
 	log.Printf("priced models loaded: %d", priceTable.Len())
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		defer cancel()
-		if err := prices.RefreshIfStale(ctx, priceTable, config.PriceCachePath(), 7*24*time.Hour, time.Now()); err != nil {
-			log.Printf("price refresh skipped: %v", err)
-		} else {
-			log.Printf("price table refreshed: %d models", priceTable.Len())
-		}
-	}()
+	// THROTTLE_NO_PRICE_REFRESH pins to the embedded fallback table — deterministic
+	// pricing for the sandbox tests; real installs fetch the live LiteLLM table.
+	if os.Getenv("THROTTLE_NO_PRICE_REFRESH") == "" {
+		go func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer cancel()
+			if err := prices.RefreshIfStale(ctx, priceTable, config.PriceCachePath(), 7*24*time.Hour, time.Now()); err != nil {
+				log.Printf("price refresh skipped: %v", err)
+			} else {
+				log.Printf("price table refreshed: %d models", priceTable.Len())
+			}
+		}()
+	}
 
 	// --- adapters: Claude + Codex (exact), Gemini + Aider (monitor/best-effort).
 	adapters := []core.Adapter{claude.New(), codex.New(), gemini.New(), aider.New()}

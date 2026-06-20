@@ -1,0 +1,19 @@
+M7: polish — subscription quota, summary, HOW-TO-TEST, README; ALL GREEN
+
+- subscription quota view: Codex rate_limits.primary (used_percent, window,
+  resets; verified from a real rollout) becomes QuotaUsed/Remaining; the
+  dashboard shows quota percent for subscription sessions. Parsed even on
+  info-null token_count events.
+- /api/summary: rollup by tool and model (cost + tokens + sessions).
+- THROTTLE_NO_PRICE_REFRESH pins the daemon to the embedded fallback table for
+  deterministic sandbox-test pricing (real installs fetch live LiteLLM).
+- HOW-TO-TEST.md: sandbox verification of every capability, never touches real
+  config. README.md: overview + honest capability matrix.
+- scripts/test-all.ps1: one command runs Go tests + Node tests + 6 sandbox
+  smokes. ALL GREEN.
+- smokes hardened (poll for discovery; deterministic pricing); removed
+  transient debug scripts.
+
+Definition of Done met.
+
+Co-Authored-By: Claude Opus 4.8 <noreply@anthropic.com>

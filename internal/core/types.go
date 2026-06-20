@@ -118,10 +118,19 @@ type SessionMeta struct {
 	Found       bool // true once the adapter has seen the session_meta/first line
 }
 
+// QuotaInfo is a subscription rolling-window usage reading (e.g. Codex
+// rate_limits.primary). Surfaced for subscription sessions as the quota view.
+type QuotaInfo struct {
+	UsedPercent   float64 // 0..100
+	WindowMinutes int64   // rolling window length
+	ResetsAt      int64   // unix seconds when the window resets (0 if unknown)
+}
+
 // ParseResult is what an adapter returns from one incremental read.
 type ParseResult struct {
 	Meta      SessionMeta  // Meta.Found == false when not (yet) seen
 	Events    []UsageEvent // usage deltas read this pass (already deduped within-file)
 	NewOffset int64        // byte offset to resume from next time
 	LastEvent time.Time    // timestamp of the last line read (for last_seen)
+	Quota     *QuotaInfo   // latest subscription quota reading this pass (nil if none)
 }

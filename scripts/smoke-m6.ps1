@@ -12,6 +12,7 @@ New-Item -ItemType Directory -Force -Path $claude, (Join-Path $sandbox '.codex')
 $env:USERPROFILE = $sandbox
 $env:HOME = $sandbox
 $env:THROTTLE_DIR = Join-Path $sandbox '.throttle'
+$env:THROTTLE_NO_PRICE_REFRESH = '1'
 Remove-Item Env:CLAUDE_CONFIG_DIR, Env:CODEX_HOME, Env:THROTTLE_FAKE_HOME -ErrorAction SilentlyContinue
 
 $settings = Join-Path $claude 'settings.json'

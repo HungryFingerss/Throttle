@@ -124,6 +124,29 @@ func TestRealCodexLogSanity(t *testing.T) {
 		len(res.Events), total, res.Meta.IsSubagent)
 }
 
+func TestQuotaParsing(t *testing.T) {
+	dir := t.TempDir()
+	p := filepath.Join(dir, "rollout-x.jsonl")
+	// A rate-limit-only token_count (info null) carrying subscription quota.
+	line := `{"timestamp":"2026-06-20T10:00:00.000Z","type":"event_msg","payload":{"type":"token_count","info":null,"rate_limits":{"limit_id":"codex","primary":{"used_percent":42.5,"window_minutes":10080,"resets_at":1777019409}}}}` + "\n"
+	os.WriteFile(p, []byte(line), 0o644)
+
+	a := NewWithPaths(dir, "")
+	res, err := a.Parse(p, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if res.Quota == nil {
+		t.Fatal("quota not parsed")
+	}
+	if res.Quota.UsedPercent != 42.5 || res.Quota.WindowMinutes != 10080 {
+		t.Fatalf("quota = %+v", res.Quota)
+	}
+	if len(res.Events) != 0 {
+		t.Fatalf("rate-limit-only event should yield no usage events, got %d", len(res.Events))
+	}
+}
+
 func TestDetectMode(t *testing.T) {
 	dir := t.TempDir()
 

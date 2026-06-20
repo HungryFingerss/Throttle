@@ -13,6 +13,7 @@ New-Item -ItemType Directory -Force -Path $encDir, $throttleDir | Out-Null
 $env:CLAUDE_CONFIG_DIR = $claudeCfg
 $env:THROTTLE_DIR = $throttleDir
 $env:THROTTLE_ADDR = $addr
+$env:THROTTLE_NO_PRICE_REFRESH = '1'   # deterministic fallback pricing for assertions
 
 $outLog = Join-Path $sandbox 'd.out.log'
 $errLog = Join-Path $sandbox 'd.err.log'

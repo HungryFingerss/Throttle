@@ -9,6 +9,7 @@ $claudeCfg = Join-Path $sandbox '.claude'
 New-Item -ItemType Directory -Force -Path (Join-Path $claudeCfg 'projects'), (Join-Path $sandbox '.throttle') | Out-Null
 $env:CLAUDE_CONFIG_DIR = $claudeCfg
 $env:THROTTLE_DIR = Join-Path $sandbox '.throttle'
+$env:THROTTLE_NO_PRICE_REFRESH = '1'
 
 # hook payload files
 $promptPayload = Join-Path $sandbox 'prompt.json'

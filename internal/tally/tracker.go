@@ -145,6 +145,10 @@ func (t *Tracker) HandlePath(path string) {
 		if primary.Mode == "" || primary.Mode == core.ModeUnknown {
 			primary.Mode = t.modeFor(a)
 		}
+		if res.Quota != nil {
+			primary.QuotaUsed = res.Quota.UsedPercent
+			primary.QuotaRemaining = 100 - res.Quota.UsedPercent
+		}
 	}
 
 	for _, ev := range res.Events {

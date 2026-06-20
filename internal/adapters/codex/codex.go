@@ -111,8 +111,19 @@ type turnContextPayload struct {
 }
 
 type eventMsgPayload struct {
-	Type string    `json:"type"`
-	Info *infoBlock `json:"info"`
+	Type       string      `json:"type"`
+	Info       *infoBlock  `json:"info"`
+	RateLimits *rateLimits `json:"rate_limits"`
+}
+
+type rateLimits struct {
+	Primary *rlWindow `json:"primary"`
+}
+
+type rlWindow struct {
+	UsedPercent   float64 `json:"used_percent"`
+	WindowMinutes int64   `json:"window_minutes"`
+	ResetsAt      int64   `json:"resets_at"`
 }
 
 type infoBlock struct {
@@ -204,8 +215,20 @@ func (a *Adapter) handleLine(raw []byte, res *core.ParseResult, currentModel *st
 		if err := json.Unmarshal(o.Payload, &p); err != nil {
 			return
 		}
-		if p.Type != "token_count" || p.Info == nil || p.Info.Last == nil {
-			return // not a usage event, or a rate-limit-only token_count (info null)
+		if p.Type != "token_count" {
+			return
+		}
+		// Subscription quota lives in rate_limits and may appear even when info
+		// is null (a rate-limit-only token_count event).
+		if p.RateLimits != nil && p.RateLimits.Primary != nil {
+			res.Quota = &core.QuotaInfo{
+				UsedPercent:   p.RateLimits.Primary.UsedPercent,
+				WindowMinutes: p.RateLimits.Primary.WindowMinutes,
+				ResetsAt:      p.RateLimits.Primary.ResetsAt,
+			}
+		}
+		if p.Info == nil || p.Info.Last == nil {
+			return // rate-limit-only token_count (no usage delta)
 		}
 		u := p.Info.Last
 		ev := core.UsageEvent{

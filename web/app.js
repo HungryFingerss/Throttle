@@ -35,8 +35,11 @@ function fmtTokens(n) {
 
 function fmtCost(s) {
   if (s.mode === "subscription") {
-    // Subscription: show API-equivalent $ (quota view lands in M7).
-    return `<span class="cost">~$${s.cost_usd.toFixed(2)}</span> <span class="model">(plan)</span>`;
+    // Subscription: API-equivalent $ + rolling-window quota % when known.
+    const q = s.quota_used > 0
+      ? ` · <span class="model">${s.quota_used.toFixed(0)}% quota</span>`
+      : ` <span class="model">(plan)</span>`;
+    return `<span class="cost">~$${s.cost_usd.toFixed(2)}</span>${q}`;
   }
   const cls = s.estimated ? "cost est" : "cost";
   const tilde = s.estimated ? "~" : "";

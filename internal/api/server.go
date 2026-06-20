@@ -83,6 +83,7 @@ func (s *Server) Handler() http.Handler {
 	mux.HandleFunc("/api/message", s.handleMessage)
 	mux.HandleFunc("/api/stop", s.handleStop)
 	mux.HandleFunc("/api/capabilities", s.handleCapabilities)
+	mux.HandleFunc("/api/summary", s.handleSummary)
 	mux.HandleFunc("/api/health", s.handleHealth)
 	mux.HandleFunc("/ws", s.handleWS)
 	if s.web != nil {
@@ -101,6 +102,41 @@ func (s *Server) handleCapabilities(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, map[string]any{"ok": true, "clients": s.hub.count()})
+}
+
+type bucket struct {
+	CostUSD  float64 `json:"cost_usd"`
+	Tokens   int64   `json:"tokens"`
+	Sessions int     `json:"sessions"`
+}
+
+// handleSummary rolls the live sessions up by tool and by model — a lightweight
+// "where is the spend going" view over the current state.
+func (s *Server) handleSummary(w http.ResponseWriter, r *http.Request) {
+	byTool := map[string]*bucket{}
+	byModel := map[string]*bucket{}
+	total := bucket{}
+	add := func(m map[string]*bucket, key string, c float64, tk int64) {
+		b := m[key]
+		if b == nil {
+			b = &bucket{}
+			m[key] = b
+		}
+		b.CostUSD += c
+		b.Tokens += tk
+		b.Sessions++
+	}
+	for _, sess := range s.tracker.Snapshot() {
+		tk := sess.Tokens.Total()
+		add(byTool, string(sess.Tool), sess.CostUSD, tk)
+		if sess.Model != "" {
+			add(byModel, sess.Model, sess.CostUSD, tk)
+		}
+		total.CostUSD += sess.CostUSD
+		total.Tokens += tk
+		total.Sessions++
+	}
+	writeJSON(w, map[string]any{"total": total, "by_tool": byTool, "by_model": byModel})
 }
 
 func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {

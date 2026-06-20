@@ -14,6 +14,7 @@ Set-Content (Join-Path $codexHome 'auth.json') -Encoding ascii -Value '{"auth_mo
 $env:CODEX_HOME = $codexHome
 $env:CLAUDE_CONFIG_DIR = Join-Path $sandbox '.claude'   # sandbox claude too (avoid real logs)
 $env:THROTTLE_DIR = Join-Path $sandbox '.throttle'
+$env:THROTTLE_NO_PRICE_REFRESH = '1'
 
 $proc = Start-Process -FilePath $daemon -ArgumentList '--addr',$addr -PassThru -NoNewWindow `
   -RedirectStandardOutput (Join-Path $sandbox o.log) -RedirectStandardError (Join-Path $sandbox e.log)
@@ -22,10 +23,15 @@ try {
 
   Copy-Item (Join-Path $root 'testdata\codex_session.jsonl') `
     (Join-Path $sessRoot 'rollout-2026-06-20T10-00-00-00000000-0000-0000-0000-000000000001.jsonl')
-  Start-Sleep -Milliseconds 700
 
-  $s = Invoke-RestMethod "http://$addr/api/sessions" -TimeoutSec 3
-  $s = @($s)
+  # poll for discovery (robust under load)
+  $s = $null
+  for ($i = 0; $i -lt 40; $i++) {
+    Start-Sleep -Milliseconds 250
+    try { $r = @(Invoke-RestMethod "http://$addr/api/sessions" -TimeoutSec 3) } catch { continue }
+    if ($r.Count -ge 1) { $s = $r; break }
+  }
+  if (-not $s) { throw "want 1 session, got 0" }
   Write-Output ("DISCOVERED: tool=" + $s[0].tool + " mode=" + $s[0].mode + " model=" + $s[0].model + " cost=" + $s[0].cost_usd + " tokens=" + ($s[0].tokens.in + $s[0].tokens.out + $s[0].tokens.cache_read))
   if ($s.Count -ne 1) { throw "want 1 session, got $($s.Count)" }
   if ($s[0].tool -ne 'codex') { throw "tool wrong" }

@@ -13,6 +13,7 @@ $env:USERPROFILE = $sandbox
 $env:HOME = $sandbox
 $env:THROTTLE_DIR = Join-Path $sandbox '.throttle'
 $env:THROTTLE_AIDER_DIRS = $proj
+$env:THROTTLE_NO_PRICE_REFRESH = '1'
 
 # Pre-populate logs (telemetry.log / history.md normally already exist) — proven
 # discovery via the daemon's initial scan; the live-append path is covered by
