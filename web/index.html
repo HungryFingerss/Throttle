@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Throttle</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <span class="dot" id="conn-dot"></span>
+      <h1>Throttle</h1>
+      <span class="tag">local control layer</span>
+    </div>
+    <div class="totals">
+      <div class="stat"><span class="num" id="total-cost">$0.00</span><span class="lbl">spend today (API)</span></div>
+      <div class="stat"><span class="num" id="active-count">0</span><span class="lbl">active sessions</span></div>
+    </div>
+  </header>
+
+  <main>
+    <table id="sessions">
+      <thead>
+        <tr>
+          <th>Tool</th>
+          <th>Project</th>
+          <th>Model</th>
+          <th>Mode</th>
+          <th class="r">In</th>
+          <th class="r">Out</th>
+          <th class="r">Cache</th>
+          <th class="r">Tokens</th>
+          <th class="r">Cost / Quota</th>
+          <th>Status</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <p id="empty" class="empty">No sessions yet. Start an agent (Claude Code, Codex, …) and it appears here instantly.</p>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

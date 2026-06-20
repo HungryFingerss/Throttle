@@ -1,0 +1,75 @@
+:root {
+  --bg: #0f1115;
+  --panel: #171a21;
+  --line: #262b35;
+  --text: #e6e9ef;
+  --muted: #8b93a3;
+  --accent: #5b9dff;
+  --green: #3fb950;
+  --amber: #d29922;
+  --red: #f85149;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 14px/1.45 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+
+.brand { display: flex; align-items: center; gap: 10px; }
+.brand h1 { font-size: 18px; margin: 0; letter-spacing: 0.3px; }
+.tag { color: var(--muted); font-size: 12px; }
+
+.dot {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: var(--red); transition: background .3s;
+}
+.dot.live { background: var(--green); box-shadow: 0 0 8px var(--green); }
+
+.totals { display: flex; gap: 28px; }
+.stat { text-align: right; }
+.stat .num { display: block; font-size: 20px; font-weight: 600; }
+.stat .lbl { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+
+main { padding: 20px 24px; }
+
+table { width: 100%; border-collapse: collapse; }
+thead th {
+  text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .5px;
+  color: var(--muted); padding: 8px 12px; border-bottom: 1px solid var(--line);
+}
+th.r, td.r { text-align: right; font-variant-numeric: tabular-nums; }
+tbody td { padding: 10px 12px; border-bottom: 1px solid var(--line); }
+tbody tr:hover { background: #1b1f27; }
+
+.path { color: var(--text); font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: 12px; }
+.model { color: var(--muted); }
+.cost { font-weight: 600; }
+.est { color: var(--amber); }
+
+.badge {
+  display: inline-block; padding: 2px 8px; border-radius: 999px;
+  font-size: 11px; font-weight: 600;
+}
+.tool-claude { background: #2a2140; color: #c8b6ff; }
+.tool-codex  { background: #11302a; color: #6ee7c7; }
+.tool-gemini { background: #1d2740; color: #9ec1ff; }
+.tool-aider  { background: #33261a; color: #f0c089; }
+
+.status-active  { color: var(--green); }
+.status-idle    { color: var(--muted); }
+.status-stopped { color: var(--red); }
+
+.empty { color: var(--muted); text-align: center; padding: 48px 0; }

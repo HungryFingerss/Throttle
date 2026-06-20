@@ -1,0 +1,26 @@
+# Build output
+/bin/
+*.exe
+*.exe~
+*.test
+*.out
+
+# Go
+/vendor/
+
+# Throttle runtime state (never commit live state or captured private logs)
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+/testdata/real-captures/
+*.local.json
+
+# Node (installer)
+/installer/node_modules/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Local toolchain helper scripts output
+/scripts/*.log
