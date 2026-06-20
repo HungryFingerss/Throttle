@@ -252,6 +252,43 @@ func (t *Tracker) Import(sessions []core.Session) {
 	}
 }
 
+// SetStop sets (or clears) a session's manual stop flag. When stopped, the
+// enforcer denies the session's next tool call (graceful stop at the boundary).
+// Returns the updated session and whether it existed.
+func (t *Tracker) SetStop(id string, stop bool) (core.Session, bool) {
+	t.mu.Lock()
+	s, ok := t.sessions[id]
+	if !ok || s.IsSubagent {
+		t.mu.Unlock()
+		return core.Session{}, false
+	}
+	s.StopFlag = stop
+	if stop {
+		s.Status = core.StatusStopped
+	} else if s.Status == core.StatusStopped {
+		s.Status = core.StatusActive
+	}
+	snap := *s
+	t.mu.Unlock()
+	t.emit(Update{Kind: SessionUpdate, Session: snap})
+	return snap, true
+}
+
+// SetSessionCaps writes resolved caps onto a live session so the dashboard can
+// render progress toward them. No effect if the session is unknown.
+func (t *Tracker) SetSessionCaps(id string, caps core.Caps) {
+	t.mu.Lock()
+	s, ok := t.sessions[id]
+	if !ok {
+		t.mu.Unlock()
+		return
+	}
+	s.Caps = caps
+	snap := *s
+	t.mu.Unlock()
+	t.emit(Update{Kind: SessionUpdate, Session: snap})
+}
+
 // Get returns a copy of one session by id.
 func (t *Tracker) Get(id string) (core.Session, bool) {
 	t.mu.Lock()

@@ -51,8 +51,15 @@ function render() {
       <td class="r">${fmtTokens(total)}</td>
       <td class="r">${fmtCost(s)}</td>
       <td class="status-${s.status}">${s.status}</td>
+      <td>${s.stop_flag
+          ? `<button class="btn resume" data-id="${s.id}" data-stop="0">Resume</button>`
+          : `<button class="btn stop" data-id="${s.id}" data-stop="1">Stop</button>`}</td>
     </tr>`;
   }).join("");
+
+  for (const b of $rows.querySelectorAll(".btn")) {
+    b.addEventListener("click", () => stopSession(b.dataset.id, b.dataset.stop === "1"));
+  }
 
   let cost = 0, active = 0;
   for (const s of rows.values()) {
@@ -70,6 +77,33 @@ function applyUpdate(u) {
   else rows.set(s.id, s);
   render();
 }
+
+async function stopSession(id, stop) {
+  try {
+    await fetch("/api/stop", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: id, stop }),
+    });
+  } catch (_) {}
+}
+
+async function setDayCap() {
+  const v = parseFloat(document.getElementById("day-cap").value);
+  const caps = { day_usd: isNaN(v) ? 0 : v };
+  try {
+    await fetch("/api/caps", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ scope: "global", caps }),
+    });
+    const st = document.getElementById("cap-status");
+    st.textContent = caps.day_usd ? `cap $${caps.day_usd.toFixed(2)}/day` : "no cap";
+    setTimeout(() => (st.textContent = ""), 2500);
+  } catch (_) {}
+}
+
+document.getElementById("set-day-cap").addEventListener("click", setDayCap);
 
 function connect() {
   const proto = location.protocol === "https:" ? "wss" : "ws";

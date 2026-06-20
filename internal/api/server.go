@@ -10,17 +10,31 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/jagannivas/throttle/internal/core"
 	"github.com/jagannivas/throttle/internal/tally"
 )
+
+// Controls is the dashboard→daemon cap-management surface (implemented by the
+// enforcer). Optional: when nil, the cap endpoints report empty/unavailable.
+type Controls interface {
+	SetGlobalCaps(core.Caps)
+	SetToolCaps(core.ToolKind, core.Caps)
+	SetSessionCaps(string, core.Caps)
+	LimitsView() any
+}
 
 // Server wires the tracker, the WS hub, the hook checker, and the web assets.
 type Server struct {
 	tracker  *tally.Tracker
 	checker  Checker
+	controls Controls
 	hub      *hub
 	upgrader websocket.Upgrader
 	web      fs.FS
 }
+
+// SetControls attaches the cap-management surface (enforcer).
+func (s *Server) SetControls(c Controls) { s.controls = c }
 
 // New builds the API server. webFS may be nil (then the dashboard route 404s).
 func New(tr *tally.Tracker, checker Checker, webFS fs.FS) *Server {
@@ -54,6 +68,8 @@ func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/check", s.handleCheck)
 	mux.HandleFunc("/api/sessions", s.handleSessions)
+	mux.HandleFunc("/api/caps", s.handleCaps)
+	mux.HandleFunc("/api/stop", s.handleStop)
 	mux.HandleFunc("/api/health", s.handleHealth)
 	mux.HandleFunc("/ws", s.handleWS)
 	if s.web != nil {
@@ -68,6 +84,68 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleSessions(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, s.tracker.Snapshot())
+}
+
+type capRequest struct {
+	Scope     string        `json:"scope"` // "global" | "tool" | "session"
+	Tool      core.ToolKind `json:"tool"`
+	SessionID string        `json:"session_id"`
+	Caps      core.Caps     `json:"caps"`
+}
+
+func (s *Server) handleCaps(w http.ResponseWriter, r *http.Request) {
+	if s.controls == nil {
+		writeJSON(w, map[string]any{"error": "caps unavailable"})
+		return
+	}
+	if r.Method == http.MethodGet {
+		writeJSON(w, s.controls.LimitsView())
+		return
+	}
+	if r.Method != http.MethodPost {
+		http.Error(w, "GET or POST", http.StatusMethodNotAllowed)
+		return
+	}
+	var req capRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	switch req.Scope {
+	case "global":
+		s.controls.SetGlobalCaps(req.Caps)
+	case "tool":
+		s.controls.SetToolCaps(req.Tool, req.Caps)
+	case "session":
+		s.controls.SetSessionCaps(req.SessionID, req.Caps)
+	default:
+		http.Error(w, "scope must be global|tool|session", http.StatusBadRequest)
+		return
+	}
+	writeJSON(w, s.controls.LimitsView())
+}
+
+type stopRequest struct {
+	SessionID string `json:"session_id"`
+	Stop      bool   `json:"stop"`
+}
+
+func (s *Server) handleStop(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return
+	}
+	var req stopRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "bad request", http.StatusBadRequest)
+		return
+	}
+	sess, ok := s.tracker.SetStop(req.SessionID, req.Stop)
+	if !ok {
+		http.Error(w, "unknown session", http.StatusNotFound)
+		return
+	}
+	writeJSON(w, sess)
 }
 
 func (s *Server) handleCheck(w http.ResponseWriter, r *http.Request) {

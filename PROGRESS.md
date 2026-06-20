@@ -8,7 +8,7 @@ Running build log. Newest entries on top.
 | Setup: Go toolchain | ✅ done (Go 1.26.4, user-local `C:\Users\jagan\go-sdk`) |
 | Setup: repo + layout | ✅ done |
 | M1 — Live monitoring spine | ✅ done — unit + integration + sandbox smoke all green |
-| M2 — Kill-switch | ⬜ |
+| M2 — Kill-switch | ✅ done — cap enforce + real hook binary, sandbox E2E (deny/allow/fail-open) green |
 | M3 — Rules layer | ⬜ |
 | M4 — Codex adapter | ⬜ |
 | M5 — Gemini + Aider | ⬜ |
@@ -54,6 +54,16 @@ Verified against 7 real rollouts + `~/.codex/auth.json`.
 - **No real Codex subagent log** exists on this machine (all `source:"cli"`). The 91× subagent-exclusion test uses a synthetic fixture built to the documented schema.
 
 ---
+
+## M2 — Kill-switch — DONE (2026-06-20)
+Hard caps that stop a run at the next tool boundary, plus stop/resume, warn threshold, fail-open.
+- **`internal/enforce`**: cap evaluator (the `api.Checker`). Resolves effective caps per session (per-session ▷ per-tool ▷ global, field-by-field), checks session $/tokens + daily $/tokens, denies at/over cap, warns at ≥80%, honors manual stop flag. **Unknown session → allow (fail-open by construction).**
+- **`cmd/throttle-hook`**: thin hook binary. Reads tool hook JSON from stdin, POSTs `/v1/check` (1.5s timeout), translates to Claude's native output: deny → `permissionDecision:"deny"`, warn → stderr note, inject → `additionalContext`. **Any daemon trouble → exit 0 silent (fail-open).** Translation logic is a pure `render()` func, unit-tested across the matrix.
+- **API**: added `/api/caps` (GET/POST global|tool|session) and `/api/stop`; enforcer wired as the daemon's Checker + Controls.
+- **Dashboard**: global daily-$ cap input + per-row Stop/Resume buttons.
+- **Tests**: enforce (deny on session/token/daily cap, warn band, quiet allow, stop-flag deny, unknown-session fail-open, per-session override beats global, daily aggregation); hook render matrix.
+- **Sandbox E2E** (`scripts/smoke-m2.ps1`): real hook ↔ real daemon — over-cap emits deny JSON, raised cap → silent allow, daemon killed → fail-open (silent, exit 0). All PASS.
+- **Test-harness note**: PowerShell's string-pipe to a native exe's stdin does NOT deliver; feed hooks via `cmd /c "hook < file"` (Claude Code uses a real stdin pipe, equivalent to the redirect). Documented in `scripts/smoke-m2.ps1`.
 
 ## M1 — Live monitoring spine — DONE (2026-06-20)
 Daemon discovers sessions via OS events, tracks live spend ms-accurately, serves a live dashboard.

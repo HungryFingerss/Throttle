@@ -18,6 +18,7 @@ import (
 	"github.com/jagannivas/throttle/internal/api"
 	"github.com/jagannivas/throttle/internal/config"
 	"github.com/jagannivas/throttle/internal/core"
+	"github.com/jagannivas/throttle/internal/enforce"
 	"github.com/jagannivas/throttle/internal/prices"
 	"github.com/jagannivas/throttle/internal/store"
 	"github.com/jagannivas/throttle/internal/tally"
@@ -62,8 +63,12 @@ func main() {
 		log.Printf("restored %d sessions from state", len(sessions))
 	}
 
+	// --- enforcer: caps + kill-switch (the Checker the hook calls).
+	enforcer := enforce.New(tracker)
+
 	// --- api server; tracker pushes updates to the dashboard via the sink.
-	srv := api.New(tracker, api.AllowAll{}, web.FS())
+	srv := api.New(tracker, enforcer, web.FS())
+	srv.SetControls(enforcer)
 	tracker.SetSink(srv.Broadcast)
 
 	// --- watcher: instant discovery + live tailing, no polling.

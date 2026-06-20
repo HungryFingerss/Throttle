@@ -73,3 +73,25 @@ tbody tr:hover { background: #1b1f27; }
 .status-stopped { color: var(--red); }
 
 .empty { color: var(--muted); text-align: center; padding: 48px 0; }
+
+.cap-control { display: flex; align-items: center; gap: 6px; }
+.cap-control label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; }
+.cap-control input {
+  width: 80px; background: #0f1115; border: 1px solid var(--line); color: var(--text);
+  border-radius: 6px; padding: 4px 8px; font: inherit;
+}
+.cap-status { color: var(--green); font-size: 11px; min-width: 90px; }
+
+.btn {
+  background: transparent; border: 1px solid var(--line); color: var(--text);
+  border-radius: 6px; padding: 3px 10px; font-size: 12px; cursor: pointer;
+}
+.btn:hover { border-color: var(--accent); }
+.btn.stop { color: var(--red); border-color: #4a2630; }
+.btn.stop:hover { background: #2a1a1f; }
+.btn.resume { color: var(--green); border-color: #1f3a28; }
+
+#set-day-cap {
+  background: var(--accent); border: none; color: #06122b; font-weight: 600;
+  border-radius: 6px; padding: 4px 10px; cursor: pointer;
+}
