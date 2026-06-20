@@ -12,8 +12,8 @@ Running build log. Newest entries on top.
 | M3 — Rules layer | ✅ done — rules inject every turn + survive compaction; sandbox E2E green |
 | M4 — Codex adapter | ✅ done — dedup + subagent-exclude + per-turn model + subscription detect; real-log validated; sandbox E2E green |
 | M5 — Gemini + Aider | ✅ done — Aider cost-from-file, Gemini OTel multi-session demux; honest capability flags; sandbox E2E green |
-| M6 — Installer | ⬜ |
-| M7 — Polish + HOW-TO-TEST | ⬜ |
+| M6 — Installer | ✅ done — npx throttle init/uninstall, hook wiring (surgical), daemon service, 6-target cross-build; node tests + sandbox E2E green |
+| M7 — Polish + HOW-TO-TEST | 🔵 in progress |
 
 ---
 
@@ -54,6 +54,15 @@ Verified against 7 real rollouts + `~/.codex/auth.json`.
 - **No real Codex subagent log** exists on this machine (all `source:"cli"`). The 91× subagent-exclusion test uses a synthetic fixture built to the documented schema.
 
 ---
+
+## M6 — Installer + packaging — DONE (2026-06-20)
+`npx throttle` CLI (Node) that wires everything and reverses cleanly. Writes to real configs, so it is fully sandbox-aware and was tested ONLY against temp dirs.
+- **`installer/`**: `bin/throttle.js` + `src/{paths,detect,hooks,service,cli}.js`. Commands: `init`, `uninstall`, `start`, `stop`, `status`, `doctor`.
+- **Hook wiring is surgical**: Claude hooks merged into `settings.json` (PreToolUse `*`, UserPromptSubmit, SessionStart `startup|resume|compact`) WITHOUT touching the user's existing hooks; Throttle's entries are tagged by the `throttle-hook` command so `uninstall` removes exactly ours and drops emptied arrays. Idempotent.
+- **Daemon service**: detached background process + pid file (no elevation, trivially reversible). Codex/Gemini/Aider: detected and the exact wiring/notes are printed (Codex TOML auto-edit deferred — safer to instruct than to mangle config we can't fully verify).
+- **Cross-build** (`scripts/build-binaries.ps1`): `throttled` + `throttle-hook` for win32/darwin/linux × x64/arm64 (Node-convention dir names matching the installer's `dist/<platform>-<arch>` lookup), CGO disabled. All 6 targets built clean.
+- **Tests**: 7 Node tests (`installer/test`) — hooks merge/preserve/idempotent/uninstall + CLI init/uninstall/dry-run against a sandbox home using real binaries.
+- **Sandbox E2E** (`scripts/smoke-m6.ps1`): real `node throttle.js init` (using the cross-built win32-x64 binaries) detected claude+codex, installed binaries, wired hooks, started the daemon (dashboard reachable); `uninstall` removed hooks + stopped the daemon; verified down + clean. PASS. Never touched real config.
 
 ## M5 — Gemini + Aider adapters — DONE (2026-06-20)
 Honest "monitor + best-effort" per the research's capability gradient. Formats VERIFIED from official docs + the gemini-cli usage-analyzer (no real Gemini/Aider token logs exist on this machine — Aider absent, Gemini telemetry off-by-default — so fixtures are documentation-derived, clearly labeled; not invented).

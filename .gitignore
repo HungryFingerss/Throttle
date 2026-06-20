@@ -17,6 +17,8 @@
 
 # Node (installer)
 /installer/node_modules/
+# Prebuilt binaries are CI build artifacts, not source
+/installer/dist/
 
 # OS
 Thumbs.db
