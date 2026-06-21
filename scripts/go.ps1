@@ -1,6 +1,10 @@
 $ErrorActionPreference = 'Stop'
-$env:Path = 'C:\Users\jagan\go-sdk\go\bin;' + $env:Path
+# Use a user-local Go SDK if one is present (no system install needed), otherwise
+# fall back to `go` on PATH. Keeps `scripts\test-all.ps1` and the smokes working
+# whether you installed Go normally or unpacked it locally.
+$localGo = Join-Path $env:USERPROFILE 'go-sdk\go\bin'
+if (Test-Path $localGo) { $env:Path = "$localGo;" + $env:Path }
 $env:GOTOOLCHAIN = 'local'
-Set-Location 'C:\Users\jagan\Projects\project\throttle'
-& 'C:\Users\jagan\go-sdk\go\bin\go.exe' @args
+Set-Location (Join-Path $PSScriptRoot '..')
+& go @args
 exit $LASTEXITCODE

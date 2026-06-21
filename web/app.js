@@ -6,7 +6,7 @@ const expanded = new Set(); // session ids whose subagent panel is open
 // Public Web3Forms access key — routes dashboard feedback to the maker's inbox.
 // It's a FORM key meant to live in client code, not a secret. Get one free at
 // web3forms.com (the email you sign up with is where feedback lands).
-const WEB3FORMS_KEY = "REPLACE_WITH_YOUR_WEB3FORMS_ACCESS_KEY";
+const WEB3FORMS_KEY = "5033f398-abfc-44bb-bdca-307e8eb173e9";
 
 function capTitle(tool) {
   const c = caps[tool];
