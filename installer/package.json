@@ -6,7 +6,8 @@
     "throttle": "bin/throttle.js"
   },
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "prepack": "node -e \"require('fs').copyFileSync('../README.md','README.md')\""
   },
   "files": [
     "bin/",

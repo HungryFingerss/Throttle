@@ -19,6 +19,8 @@
 /installer/node_modules/
 # Prebuilt binaries are CI build artifacts, not source
 /installer/dist/
+# README is copied from the repo root at pack time (prepack), not committed
+/installer/README.md
 
 # OS
 Thumbs.db
