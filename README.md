@@ -1,5 +1,14 @@
 # Throttle
 
+```text
+████████╗██╗  ██╗██████╗  ██████╗ ████████╗████████╗██╗     ███████╗
+╚══██╔══╝██║  ██║██╔══██╗██╔═══██╗╚══██╔══╝╚══██╔══╝██║     ██╔════╝
+   ██║   ███████║██████╔╝██║   ██║   ██║      ██║   ██║     █████╗
+   ██║   ██╔══██║██╔══██╗██║   ██║   ██║      ██║   ██║     ██╔══╝
+   ██║   ██║  ██║██║  ██║╚██████╔╝   ██║      ██║   ███████╗███████╗
+   ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝    ╚═╝      ╚═╝   ╚══════╝╚══════╝
+```
+
 A local control layer for AI coding agents. One resident daemon plus a live
 dashboard that watches every agent session on your machine, shows what each one
 is spending in real time, stops a run when it hits a budget, and injects rules
@@ -48,8 +57,9 @@ The dashboard never claims a capability a tool can't back — hover any tool bad
 ## Accounting correctness
 
 The hard parts, each tested against captured/real‑schema fixtures:
-incremental byte‑offset reads, Codex duplicate‑event dedup, subagent exclusion
-(the full‑history‑replay overcount), per‑turn model attribution across
+incremental byte‑offset reads, Codex duplicate‑event dedup, Codex replay‑subagent
+exclusion, Claude subagent spend folded into the parent total and itemized
+per‑day in the dashboard, per‑turn model attribution across
 mid‑session switches, subscription‑vs‑API detection from auth files, separate
 cache‑token pricing, reasoning tokens not double‑counted, and tolerance for
 truncated/old‑format log lines.
@@ -57,10 +67,23 @@ truncated/old‑format log lines.
 ## Install
 
 ```bash
-npx throttle init       # detect tools, wire hooks, start daemon, open dashboard
-npx throttle status
-npx throttle uninstall  # remove hooks, stop daemon
+npx @hungryfingerss/throttle init       # detect tools, wire hooks, start daemon, open dashboard
+npx @hungryfingerss/throttle status
+npx @hungryfingerss/throttle uninstall  # remove hooks, stop daemon
 ```
+
+Or install the `throttle` command globally:
+
+```bash
+npm install -g @hungryfingerss/throttle
+throttle init
+```
+
+## Privacy
+
+Throttle reads your local logs and writes only to its own state dir — your
+prompts, code, and keys never leave your machine. The only thing that ever
+leaves is the dashboard's **Feedback** button, and only when you click Send.
 
 ## Build from source
 

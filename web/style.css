@@ -135,3 +135,26 @@ tbody tr:hover { background: #1b1f27; }
 .submodel { color: var(--muted); }
 .subtok { text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
 .subcost { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* Feedback footer */
+.feedback { padding: 16px 24px 32px; border-top: 1px solid var(--line); margin-top: 12px; }
+.fb-toggle {
+  background: transparent; border: 1px solid var(--line); color: var(--muted);
+  border-radius: 999px; padding: 5px 14px; font-size: 12px; cursor: pointer;
+}
+.fb-toggle:hover { border-color: var(--accent); color: var(--text); }
+.fb-panel { margin-top: 12px; max-width: 640px; }
+.fb-panel textarea {
+  width: 100%; background: #0f1115; border: 1px solid var(--line); color: var(--text);
+  border-radius: 6px; padding: 8px 10px; font: 13px/1.4 ui-sans-serif, system-ui, sans-serif; resize: vertical;
+}
+.fb-row { display: flex; gap: 10px; align-items: center; margin-top: 8px; }
+.fb-row input {
+  flex: 1; background: #0f1115; border: 1px solid var(--line); color: var(--text);
+  border-radius: 6px; padding: 6px 10px; font: inherit;
+}
+#fb-send {
+  background: var(--accent); border: none; color: #06122b; font-weight: 600;
+  border-radius: 6px; padding: 6px 16px; cursor: pointer;
+}
+.fb-status { color: var(--green); font-size: 12px; min-width: 80px; }

@@ -1,0 +1,37 @@
+name: release
+
+# Tag a version (e.g. `git tag v0.1.0 && git push --tags`) to build the binaries
+# for every OS/arch and attach them to the GitHub Release. The npm installer
+# downloads the matching asset on `init`.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: build + publish binaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Build all targets
+        run: |
+          mkdir -p out
+          for t in windows/amd64 windows/arm64 darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
+            os="${t%/*}"; arch="${t#*/}"; ext=""
+            [ "$os" = "windows" ] && ext=".exe"
+            echo "building $os/$arch"
+            GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 go build -trimpath -o "out/throttled-$os-$arch$ext" ./cmd/throttled
+            GOOS="$os" GOARCH="$arch" CGO_ENABLED=0 go build -trimpath -o "out/throttle-hook-$os-$arch$ext" ./cmd/throttle-hook
+          done
+          ls -la out
+      - name: Publish to the GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: out/*
+          generate_release_notes: true

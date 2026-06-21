@@ -56,6 +56,18 @@
     <p id="empty" class="empty">No sessions yet. Start an agent (Claude Code, Codex, …) and it appears here instantly.</p>
   </main>
 
+  <footer class="feedback">
+    <button id="fb-toggle" class="fb-toggle">💬  Feedback / suggestion</button>
+    <div id="fb-panel" class="fb-panel" hidden>
+      <textarea id="fb-text" rows="3" placeholder="What's working? What's missing? What would you change? — sent straight to the Throttle maker."></textarea>
+      <div class="fb-row">
+        <input id="fb-email" type="email" placeholder="your email (optional — so we can reply)" />
+        <button id="fb-send">Send</button>
+        <span id="fb-status" class="fb-status"></span>
+      </div>
+    </div>
+  </footer>
+
   <script src="app.js"></script>
 </body>
 </html>

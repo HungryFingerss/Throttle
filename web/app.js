@@ -3,6 +3,11 @@ const rows = new Map(); // sessionId -> session
 let caps = {};          // tool -> capabilities
 const expanded = new Set(); // session ids whose subagent panel is open
 
+// Public Web3Forms access key — routes dashboard feedback to the maker's inbox.
+// It's a FORM key meant to live in client code, not a secret. Get one free at
+// web3forms.com (the email you sign up with is where feedback lands).
+const WEB3FORMS_KEY = "REPLACE_WITH_YOUR_WEB3FORMS_ACCESS_KEY";
+
 function capTitle(tool) {
   const c = caps[tool];
   if (!c) return "";
@@ -238,6 +243,46 @@ async function loadCaps() {
   } catch (_) {}
 }
 
+function initFeedback() {
+  const toggle = document.getElementById("fb-toggle");
+  const panel = document.getElementById("fb-panel");
+  const send = document.getElementById("fb-send");
+  const st = document.getElementById("fb-status");
+  if (!toggle || !panel || !send) return;
+  toggle.addEventListener("click", () => { panel.hidden = !panel.hidden; });
+  send.addEventListener("click", async () => {
+    const msg = document.getElementById("fb-text").value.trim();
+    if (!msg) { st.textContent = "write something first"; return; }
+    if (WEB3FORMS_KEY.startsWith("REPLACE_")) { st.textContent = "feedback key not configured"; return; }
+    const email = document.getElementById("fb-email").value.trim();
+    st.textContent = "sending…";
+    try {
+      const r = await fetch("https://api.web3forms.com/submit", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Accept: "application/json" },
+        body: JSON.stringify({
+          access_key: WEB3FORMS_KEY,
+          subject: "Throttle feedback",
+          from_name: "Throttle dashboard",
+          replyto: email || undefined,
+          message: msg + (email ? `\n\n— from: ${email}` : ""),
+        }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (j.success) {
+        st.textContent = "thanks — sent ✓";
+        document.getElementById("fb-text").value = "";
+        setTimeout(() => { st.textContent = ""; panel.hidden = true; }, 2500);
+      } else {
+        st.textContent = "couldn't send" + (j.message ? ` (${j.message})` : "");
+      }
+    } catch (_) {
+      st.textContent = "couldn't send — check your connection";
+    }
+  });
+}
+
 loadCaps();
 loadRules();
+initFeedback();
 connect();

@@ -15,27 +15,27 @@ function sandboxHome() {
   return home;
 }
 
-function withHome(home, fn) {
+async function withHome(home, fn) {
   const prev = process.env.THROTTLE_FAKE_HOME;
   process.env.THROTTLE_FAKE_HOME = home;
   // src modules read env at call time, but cache nothing — fresh require is fine.
   delete require.cache[require.resolve("../src/cli")];
   delete require.cache[require.resolve("../src/paths")];
   try {
-    return fn(require("../src/cli"));
+    return await fn(require("../src/cli"));
   } finally {
     if (prev === undefined) delete process.env.THROTTLE_FAKE_HOME;
     else process.env.THROTTLE_FAKE_HOME = prev;
   }
 }
 
-test("init wires hooks + installs binaries; uninstall reverses it", { skip: !haveBinaries ? "repo binaries not built" : false }, () => {
+test("init wires hooks + installs binaries; uninstall reverses it", { skip: !haveBinaries ? "repo binaries not built" : false }, async () => {
   const home = sandboxHome();
   const logs = [];
   const log = (m) => logs.push(m);
 
-  withHome(home, (cli) => {
-    const code = cli.main(["init", "--no-start", "--no-open", "--bin-src", repoBin], log);
+  await withHome(home, async (cli) => {
+    const code = await cli.main(["init", "--no-start", "--no-open", "--bin-src", repoBin], log);
     assert.strictEqual(code, 0);
 
     // binaries copied
@@ -47,17 +47,17 @@ test("init wires hooks + installs binaries; uninstall reverses it", { skip: !hav
     assert.ok(JSON.stringify(settings.hooks).includes("throttle-hook"), "claude hooks wired");
 
     // uninstall removes hooks
-    const code2 = cli.main(["uninstall"], log);
+    const code2 = await cli.main(["uninstall"], log);
     assert.strictEqual(code2, 0);
     const after = JSON.parse(fs.readFileSync(path.join(home, ".claude", "settings.json"), "utf8"));
     assert.ok(!JSON.stringify(after.hooks || {}).includes("throttle-hook"), "hooks removed");
   });
 });
 
-test("dry-run writes nothing", () => {
+test("dry-run writes nothing", async () => {
   const home = sandboxHome();
-  withHome(home, (cli) => {
-    const code = cli.main(["init", "--dry-run", "--no-open", "--bin-src", repoBin], () => {});
+  await withHome(home, async (cli) => {
+    const code = await cli.main(["init", "--dry-run", "--no-open", "--bin-src", repoBin], () => {});
     assert.strictEqual(code, 0);
     assert.ok(!fs.existsSync(path.join(home, ".throttle", "bin")), "dry-run created no bin dir");
     const settingsPath = path.join(home, ".claude", "settings.json");

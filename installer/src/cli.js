@@ -8,6 +8,23 @@ const P = require("./paths");
 const hooks = require("./hooks");
 const { detect } = require("./detect");
 const service = require("./service");
+const { ensureBinaries } = require("./download");
+
+// ASCII banner shown on `init` and a bare `npx throttle` (figlet "ANSI Shadow").
+function banner(url) {
+  const cyan = (s) => `\x1b[36m${s}\x1b[0m`;
+  const art = [
+    "  ████████╗██╗  ██╗██████╗  ██████╗ ████████╗████████╗██╗     ███████╗",
+    "  ╚══██╔══╝██║  ██║██╔══██╗██╔═══██╗╚══██╔══╝╚══██╔══╝██║     ██╔════╝",
+    "     ██║   ███████║██████╔╝██║   ██║   ██║      ██║   ██║     █████╗  ",
+    "     ██║   ██╔══██║██╔══██╗██║   ██║   ██║      ██║   ██║     ██╔══╝  ",
+    "     ██║   ██║  ██║██║  ██║╚██████╔╝   ██║      ██║   ███████╗███████╗",
+    "     ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝    ╚═╝      ╚═╝   ╚══════╝╚══════╝",
+  ].join("\n");
+  let out = "\n" + cyan(art) + "\n\n  \x1b[1mlocal control layer for your AI coding agents\x1b[0m\n";
+  if (url) out += "\n  Throttle is live at " + cyan(url) + "\n";
+  return out;
+}
 
 function parseArgs(argv) {
   const args = { _: [], flags: {}, aiderDirs: [] };
@@ -63,25 +80,27 @@ function openBrowser(url) {
   } catch (_) {}
 }
 
-function cmdInit(args, log) {
+async function cmdInit(args, log) {
   const addr = args.flags.addr || "127.0.0.1:7878";
   const dry = !!args.flags["dry-run"];
-  const binSrc = args.flags["bin-src"] || defaultBinSrc();
+  let binSrc = args.flags["bin-src"] || defaultBinSrc();
   const tools = detect();
 
   log(`Throttle init`);
   log(`  state dir: ${P.throttleDir()}`);
   log(`  detected:  ${Object.entries(tools).filter(([, v]) => v).map(([k]) => k).join(", ") || "(none)"}`);
 
-  if (!binSrc) throw new Error("no binaries found; pass --bin-src <dir> with throttled + throttle-hook");
-
   if (dry) {
-    log(`  [dry-run] would copy binaries from ${binSrc} → ${P.binDir()}`);
+    log(`  [dry-run] would use binaries from ${binSrc || "the GitHub release"} → ${P.binDir()}`);
     if (tools.claude) log(`  [dry-run] would wire Claude hooks → ${P.claudeSettingsPath()}`);
     log(`  [dry-run] would start daemon on ${addr} and open dashboard`);
     return 0;
   }
 
+  if (!binSrc) {
+    // No local binaries → fetch the ones for this OS from the GitHub release.
+    binSrc = await ensureBinaries(require("../package.json").version, log);
+  }
   copyBinaries(binSrc, P.binDir());
   log(`  installed binaries → ${P.binDir()}`);
 
@@ -109,7 +128,7 @@ function cmdInit(args, log) {
 
   const url = `http://${addr}`;
   if (!args.flags["no-open"]) openBrowser(url);
-  log(`  dashboard: ${url}`);
+  log(banner(url));
   return 0;
 }
 
@@ -164,7 +183,8 @@ function main(argv, log = console.log) {
     case "status": return cmdStatus(args, log);
     case "doctor": return cmdDoctor(args, log);
     default:
-      log("usage: throttle <init|uninstall|start|stop|status|doctor> [--dry-run] [--no-open] [--bin-src dir] [--addr host:port] [--aider-dir dir] [--purge]");
+      log(banner());
+      log("  usage: throttle <init|uninstall|start|stop|status|doctor> [--dry-run] [--no-open] [--bin-src dir] [--addr host:port] [--aider-dir dir] [--purge]");
       return cmd === "help" ? 0 : 1;
   }
 }
