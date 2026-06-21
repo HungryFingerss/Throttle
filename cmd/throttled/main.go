@@ -7,7 +7,9 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -30,8 +32,15 @@ import (
 
 func main() {
 	addr := flag.String("addr", "127.0.0.1:7878", "dashboard/API listen address (localhost only)")
+	allowRemote := flag.Bool("allow-remote", false, "permit binding a non-loopback address (the control API is UNAUTHENTICATED — not recommended)")
 	startupWindow := flag.Duration("startup-window", 6*time.Hour, "only attach to sessions written within this window at startup")
 	flag.Parse()
+
+	if !*allowRemote {
+		if err := requireLoopback(*addr); err != nil {
+			log.Fatalf("refusing to bind %q: %v — the control API is unauthenticated; use a 127.0.0.1 address, or pass --allow-remote to override", *addr, err)
+		}
+	}
 
 	log.SetFlags(log.LstdFlags | log.Lmsgprefix)
 	log.SetPrefix("throttled ")
@@ -67,11 +76,14 @@ func main() {
 
 	// --- tracker + restore persisted offsets.
 	tracker := tally.New(priceTable, adapters)
-	if sessions, err := store.Load(config.StatePath()); err != nil {
+	if sessions, offsets, err := store.Load(config.StatePath()); err != nil {
 		log.Printf("state load failed (starting fresh): %v", err)
-	} else if len(sessions) > 0 {
-		tracker.Import(sessions)
-		log.Printf("restored %d sessions from state", len(sessions))
+	} else {
+		if len(sessions) > 0 {
+			tracker.Import(sessions)
+			log.Printf("restored %d sessions from state", len(sessions))
+		}
+		tracker.ImportOffsets(offsets)
 	}
 
 	// --- enforcer: caps + kill-switch (the Checker the hook calls).
@@ -107,12 +119,31 @@ func main() {
 	log.Printf("shutting down…")
 
 	// Persist final state so the next start resumes from current offsets.
-	if err := store.Save(config.StatePath(), tracker.ExportAll()); err != nil {
+	if err := store.Save(config.StatePath(), tracker.ExportAll(), tracker.ExportOffsets()); err != nil {
 		log.Printf("final state save failed: %v", err)
 	}
 	shutCtx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	defer cancel()
 	_ = httpSrv.Shutdown(shutCtx)
+}
+
+// requireLoopback rejects any listen address not bound to the loopback
+// interface. The control API (/api/stop, /api/caps, /api/rules) is
+// unauthenticated, so a routable bind would let other hosts on the network kill
+// the user's agents or inject rules.
+func requireLoopback(addr string) error {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return err
+	}
+	if host == "localhost" {
+		return nil
+	}
+	ip := net.ParseIP(host)
+	if ip == nil || !ip.IsLoopback() {
+		return fmt.Errorf("host %q is not loopback", host)
+	}
+	return nil
 }
 
 func backgroundLoops(ctx context.Context, tracker *tally.Tracker) {
@@ -127,7 +158,7 @@ func backgroundLoops(ctx context.Context, tracker *tally.Tracker) {
 		case <-idle.C:
 			tracker.SweepIdle()
 		case <-save.C:
-			if err := store.Save(config.StatePath(), tracker.ExportAll()); err != nil {
+			if err := store.Save(config.StatePath(), tracker.ExportAll(), tracker.ExportOffsets()); err != nil {
 				log.Printf("state save failed: %v", err)
 			}
 		}

@@ -1,6 +1,7 @@
 // Throttle dashboard: subscribe to /ws, render one row per live session.
 const rows = new Map(); // sessionId -> session
 let caps = {};          // tool -> capabilities
+const expanded = new Set(); // session ids whose subagent panel is open
 
 function capTitle(tool) {
   const c = caps[tool];
@@ -51,6 +52,39 @@ function shortPath(p) {
   return p.replace(/\\/g, "/").split("/").slice(-2).join("/");
 }
 
+function tokTotal(t) {
+  t = t || {};
+  return (t.in || 0) + (t.out || 0) + (t.cache_read || 0) + (t.cache_creation || 0);
+}
+
+// subagentPanel renders the (hidden until expanded) per-day subagent breakdown.
+// These tokens/cost are already in the row's headline total; this just itemizes
+// them, e.g. "2026-06-21 → sub-a5c1f0e4 · haiku · 1.2k tok · $0.0040".
+function subagentPanel(s) {
+  const subs = s.subagents || [];
+  if (!subs.length || !expanded.has(s.id)) return "";
+  const byDay = {};
+  for (const x of subs) (byDay[x.day || "—"] ||= []).push(x);
+  const sub = s.mode === "subscription";
+  const body = Object.keys(byDay).sort().reverse().map((day) => {
+    const items = byDay[day]
+      .slice().sort((a, b) => (b.cost_usd || 0) - (a.cost_usd || 0))
+      .map((x) => {
+        const kind = x.compact ? "compact" : "sub";
+        const id = (x.id || "").replace(/^acompact-/, "").slice(0, 8);
+        const cost = `${sub ? "~" : ""}$${(x.cost_usd || 0).toFixed(4)}`;
+        return `<div class="subitem">
+          <span class="subid">${kind}-${id}</span>
+          <span class="submodel">${x.model || "—"}</span>
+          <span class="subtok">${fmtTokens(tokTotal(x.tokens))} tok</span>
+          <span class="subcost">${cost}</span>
+        </div>`;
+      }).join("");
+    return `<div class="subday"><div class="subday-h">${day}</div>${items}</div>`;
+  }).join("");
+  return `<tr class="subrow"><td colspan="11"><div class="subpanel">${body}</div></td></tr>`;
+}
+
 function render() {
   $empty.style.display = rows.size ? "none" : "block";
 
@@ -61,9 +95,13 @@ function render() {
     const t = s.tokens || {};
     const total = (t.in || 0) + (t.out || 0) + (t.cache_read || 0) + (t.cache_creation || 0);
     const cache = (t.cache_read || 0) + (t.cache_creation || 0);
+    const nsub = (s.subagents || []).length;
+    const toggle = nsub
+      ? `<button class="subtoggle" data-id="${s.id}">${expanded.has(s.id) ? "▾" : "▸"} ${nsub} sub${nsub === 1 ? "" : "s"}</button>`
+      : "";
     return `<tr>
       <td><span class="badge tool-${s.tool}" title="${capTitle(s.tool)}">${s.tool}${capMark(s.tool)}</span></td>
-      <td class="path" title="${s.project_path || ""}">${shortPath(s.project_path)}</td>
+      <td class="path" title="${s.project_path || ""}">${shortPath(s.project_path)} ${toggle}</td>
       <td class="model">${s.model || "—"}</td>
       <td>${s.mode || "—"}</td>
       <td class="r">${fmtTokens(t.in)}</td>
@@ -78,8 +116,16 @@ function render() {
           ? `<button class="btn resume" data-id="${s.id}" data-stop="0">Resume</button>`
           : `<button class="btn stop" data-id="${s.id}" data-stop="1">Stop</button>`}
       </td>
-    </tr>`;
+    </tr>${subagentPanel(s)}`;
   }).join("");
+
+  for (const b of $rows.querySelectorAll(".subtoggle")) {
+    b.addEventListener("click", () => {
+      const id = b.dataset.id;
+      expanded.has(id) ? expanded.delete(id) : expanded.add(id);
+      render();
+    });
+  }
 
   for (const b of $rows.querySelectorAll(".btn.stop, .btn.resume")) {
     b.addEventListener("click", () => stopSession(b.dataset.id, b.dataset.stop === "1"));

@@ -80,3 +80,26 @@ func TestOverlayWins(t *testing.T) {
 		t.Fatalf("overlaid price not applied: got %v", got)
 	}
 }
+
+// TestVariantNotMispricedAsSibling guards the fuzzy-match fix: a model variant
+// not in the table (gpt-5-codex, gpt-5-nano) must resolve to its real base
+// (gpt-5), NEVER to a cheaper different variant (gpt-5-mini), which the old
+// raw-prefix matcher did (~5x output under-count, flagged as exact).
+func TestVariantNotMispricedAsSibling(t *testing.T) {
+	tbl := Fallback()
+	tk := core.Tokens{Output: 1000}
+	mini, _ := tbl.Cost(tk, "gpt-5-mini")
+	base, _ := tbl.Cost(tk, "gpt-5")
+	for _, m := range []string{"gpt-5-codex", "gpt-5-nano"} {
+		got, est := tbl.Cost(tk, m)
+		if est {
+			t.Fatalf("%s should resolve to the gpt-5 base, got estimate", m)
+		}
+		if approx(got, mini) {
+			t.Fatalf("%s was mis-priced as gpt-5-mini (%.10f) — must not match a different variant", m, got)
+		}
+		if !approx(got, base) {
+			t.Fatalf("%s should price as the gpt-5 base (%.10f), got %.10f", m, base, got)
+		}
+	}
+}

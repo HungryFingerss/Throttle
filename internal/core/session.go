@@ -48,4 +48,19 @@ type Session struct {
 	// Estimated is true when at least one event was priced with a fallback
 	// (unknown model / missing price) — the UI should flag the cost as approximate.
 	Estimated bool `json:"estimated"`
+
+	// Subagents is the per-(subagent, day) breakdown for this session. These
+	// tokens/cost are ALSO included in Tokens/CostUSD above — this slice just
+	// itemizes them for the dashboard accordion (hidden until expanded).
+	Subagents []SubagentUsage `json:"subagents,omitempty"`
+}
+
+// SubagentUsage is one subagent's spend on one day, for the dashboard breakdown.
+type SubagentUsage struct {
+	ID      string  `json:"id"`      // the subagent's agentId
+	Day     string  `json:"day"`     // YYYY-MM-DD, from the subagent's turns
+	Model   string  `json:"model"`   // last model the subagent used
+	Tokens  Tokens  `json:"tokens"`  // this subagent's tokens on this day
+	CostUSD float64 `json:"cost_usd"`
+	Compact bool    `json:"compact"` // true for auto-compaction subagents
 }

@@ -27,9 +27,10 @@ func TestParseClaudeFixture(t *testing.T) {
 		t.Fatalf("session id = %q", res.Meta.ID)
 	}
 
-	// A, A-dup, S(sidechain), B — malformed and no-usage lines skipped.
-	if len(res.Events) != 4 {
-		t.Fatalf("got %d events, want 4: %+v", len(res.Events), res.Events)
+	// A, A-dup, B — inline sidechain (subagent), malformed, and no-usage lines
+	// are skipped. Subagent spend is read from the nested subagents/ files.
+	if len(res.Events) != 3 {
+		t.Fatalf("got %d events, want 3: %+v", len(res.Events), res.Events)
 	}
 
 	// First event = A, sonnet, exact tokens.
@@ -48,14 +49,17 @@ func TestParseClaudeFixture(t *testing.T) {
 			res.Events[0].DedupKey, res.Events[1].DedupKey)
 	}
 
-	// Sidechain folded in (present as an event) with its model.
-	if res.Events[2].Model != "claude-sonnet-4-6" || res.Events[2].Tokens.Input != 5 {
-		t.Fatalf("sidechain event wrong: %+v", res.Events[2])
+	// The inline sidechain line (input_tokens:5) is NOT counted in the main
+	// transcript — it would double-count against the nested subagent file.
+	for _, e := range res.Events {
+		if e.Tokens.Input == 5 {
+			t.Fatalf("inline sidechain line should be skipped in the main transcript: %+v", e)
+		}
 	}
 
-	// Mid-session model switch captured on the last event.
-	if res.Events[3].Model != "claude-opus-4-8" {
-		t.Fatalf("event3 model = %q, want opus", res.Events[3].Model)
+	// Mid-session model switch captured on the last (B) event.
+	if res.Events[2].Model != "claude-opus-4-8" {
+		t.Fatalf("event2 model = %q, want opus", res.Events[2].Model)
 	}
 
 	// Offset advanced to EOF (all lines newline-terminated).
@@ -151,10 +155,16 @@ func TestSessionFileID(t *testing.T) {
 		t.Fatalf("top-level file: id=%q ok=%v", id, ok)
 	}
 
-	// Nested subagent transcript → ignored.
+	// Nested subagent transcript → attributed to the PARENT session.
+	pid, ok := a.SessionFileID(filepath.Join(root, "C--Users-jagan-demo", "abc-123", "subagents", "agent-axyz.jsonl"))
+	if !ok || pid != "abc-123" {
+		t.Fatalf("subagent file should map to parent abc-123: id=%q ok=%v", pid, ok)
+	}
+
+	// A non-agent file under subagents/ → ignored.
 	_, ok = a.SessionFileID(filepath.Join(root, "C--Users-jagan-demo", "abc-123", "subagents", "x.jsonl"))
 	if ok {
-		t.Fatal("nested subagent file should be ignored")
+		t.Fatal("non-agent nested file should be ignored")
 	}
 
 	// Outside the root → ignored.

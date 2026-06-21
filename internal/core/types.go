@@ -97,6 +97,14 @@ type UsageEvent struct {
 	SessionID   string
 	ProjectPath string
 
+	// SubagentID is non-empty when this event comes from a Claude subagent
+	// transcript (a nested subagents/agent-<id>.jsonl file). Its tokens fold
+	// into the PARENT session's total but are also itemized per subagent for the
+	// dashboard breakdown. SubagentCompact marks an auto-compaction subagent
+	// (agent-acompact-*).
+	SubagentID      string
+	SubagentCompact bool
+
 	// CostOverride lets an adapter supply the dollar cost directly (e.g. Aider
 	// prints "Cost: $X" in its history) instead of having the daemon price the
 	// tokens. Used only when HasCostOverride is true.

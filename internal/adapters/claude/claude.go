@@ -65,10 +65,34 @@ func (a *Adapter) SessionFileID(path string) (string, bool) {
 		return "", false
 	}
 	parts := strings.Split(filepath.ToSlash(rel), "/")
-	if len(parts) != 2 {
-		return "", false // not a direct <encoded>/<file>.jsonl
+	// Top-level main transcript: <encoded>/<session>.jsonl
+	if len(parts) == 2 {
+		return strings.TrimSuffix(parts[1], ".jsonl"), true
 	}
-	return strings.TrimSuffix(parts[1], ".jsonl"), true
+	// Nested subagent transcript: <encoded>/<session>/subagents/.../agent-<id>.jsonl
+	// is attributed to its PARENT session (<session>), so its tokens fold into
+	// the parent total and feed the per-subagent breakdown.
+	if len(parts) >= 4 && parts[2] == "subagents" &&
+		strings.HasPrefix(parts[len(parts)-1], "agent-") {
+		return parts[1], true
+	}
+	return "", false
+}
+
+// subagentInfo classifies a path: subID is non-empty (the agentId) when path is
+// a nested subagents/agent-<id>.jsonl file; compact marks an agent-acompact-*
+// (auto-compaction) subagent. For a main transcript subID is "".
+func subagentInfo(root, path string) (subID string, compact bool) {
+	rel, err := filepath.Rel(root, path)
+	if err != nil {
+		return "", false
+	}
+	parts := strings.Split(filepath.ToSlash(rel), "/")
+	if len(parts) < 4 || parts[2] != "subagents" {
+		return "", false
+	}
+	id := strings.TrimPrefix(strings.TrimSuffix(parts[len(parts)-1], ".jsonl"), "agent-")
+	return id, strings.HasPrefix(id, "acompact-")
 }
 
 // ---- line schema (only the fields we use) ----
@@ -102,6 +126,7 @@ type usage struct {
 // just before it so the next pass re-reads it once complete.
 func (a *Adapter) Parse(path string, fromOffset int64) (core.ParseResult, error) {
 	res := core.ParseResult{NewOffset: fromOffset}
+	subID, subCompact := subagentInfo(a.root, path)
 
 	f, err := os.Open(path)
 	if err != nil {
@@ -121,7 +146,7 @@ func (a *Adapter) Parse(path string, fromOffset int64) (core.ParseResult, error)
 	for {
 		chunk, rerr := r.ReadBytes('\n')
 		if len(chunk) > 0 && chunk[len(chunk)-1] == '\n' {
-			a.handleLine(chunk, &res)
+			a.handleLine(chunk, &res, subID, subCompact)
 			offset += int64(len(chunk))
 		}
 		// A non-newline-terminated tail is a partial line: stop, don't advance.
@@ -134,14 +159,23 @@ func (a *Adapter) Parse(path string, fromOffset int64) (core.ParseResult, error)
 	return res, nil
 }
 
-func (a *Adapter) handleLine(raw []byte, res *core.ParseResult) {
+func (a *Adapter) handleLine(raw []byte, res *core.ParseResult, subID string, subCompact bool) {
 	var ln line
 	if err := json.Unmarshal(raw, &ln); err != nil {
 		return // tolerate unparseable / old-format lines
 	}
+	isSub := subID != ""
 
-	// Capture session metadata the first time we see a real cwd.
-	if !res.Meta.Found && ln.Cwd != "" {
+	// In the MAIN transcript, sidechain lines are subagent turns — but on real
+	// Claude they live in the nested subagents/ files we read separately. Skip
+	// any inline sidechain line so it is never double-counted.
+	if !isSub && ln.IsSidechain {
+		return
+	}
+
+	// Capture session metadata only from the main transcript (subagent files
+	// share the parent's cwd/sessionId; the parent owns the row's identity).
+	if !isSub && !res.Meta.Found && ln.Cwd != "" {
 		res.Meta = core.SessionMeta{
 			ID:          ln.SessionID,
 			Tool:        core.ToolClaude,
@@ -165,7 +199,9 @@ func (a *Adapter) handleLine(raw []byte, res *core.ParseResult) {
 			CacheRead:     u.CacheReadInputTokens,
 			CacheCreation: u.CacheCreationInputTokens,
 		},
-		DedupKey: dedupKey(ln),
+		DedupKey:        dedupKey(ln),
+		SubagentID:      subID,
+		SubagentCompact: subCompact,
 	}
 	if ev.Tokens.IsZero() {
 		return // nothing billable

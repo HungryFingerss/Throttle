@@ -20,6 +20,11 @@ $env:THROTTLE_NO_PRICE_REFRESH = '1'
 # the M1/M4 smokes and the gemini truncated-tail unit test.
 Copy-Item (Join-Path $root 'testdata\gemini_telemetry.log') (Join-Path $gem 'telemetry.log')
 Copy-Item (Join-Path $root 'testdata\aider_history.md') (Join-Path $proj '.aider.chat.history.md')
+# Copy-Item preserves the source mtime; the daemon's startup scan only attaches
+# to files modified within its window. Touch to now so the smoke is robust no
+# matter how old the committed fixtures are.
+(Get-Item (Join-Path $gem 'telemetry.log')).LastWriteTime = Get-Date
+(Get-Item (Join-Path $proj '.aider.chat.history.md')).LastWriteTime = Get-Date
 
 $proc = Start-Process -FilePath $daemon -ArgumentList '--addr',$addr -PassThru -NoNewWindow `
   -RedirectStandardOutput (Join-Path $sandbox o.log) -RedirectStandardError (Join-Path $sandbox e.log)

@@ -70,3 +70,14 @@ test("uninstall on a file with no throttle hooks is a no-op", () => {
   const changed = hooks.uninstall(p);
   assert.strictEqual(changed, false);
 });
+
+test("install refuses to clobber an unparseable settings.json (CRITICAL safety)", () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), "throttle-hooks-"));
+  const p = path.join(dir, "settings.json");
+  // A real-world hand-edit mistake: a trailing comma → invalid JSON.
+  const original = '{\n  "permissions": { "allow": ["Read"] },\n}';
+  fs.writeFileSync(p, original);
+  assert.throws(() => hooks.install(p, CMD), /not valid JSON/, "install must abort, not overwrite");
+  assert.strictEqual(fs.readFileSync(p, "utf8"), original, "the user's original settings are untouched");
+  assert.ok(fs.existsSync(p + ".throttle-bak"), "a backup copy was written");
+});

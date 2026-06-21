@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"io/fs"
 	"net/http"
+	"net/url"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -57,9 +58,24 @@ func New(tr *tally.Tracker, checker Checker, webFS fs.FS) *Server {
 		hub:     newHub(),
 		web:     webFS,
 		upgrader: websocket.Upgrader{
-			// The dashboard is served from the same local origin; allow all so
-			// localhost dev/tools work.
-			CheckOrigin: func(*http.Request) bool { return true },
+			// Accept WebSocket upgrades only from a localhost origin (or no
+			// Origin at all — non-browser clients). Stops a remote web page from
+			// driving the dashboard control channel through the user's browser.
+			CheckOrigin: func(r *http.Request) bool {
+				origin := r.Header.Get("Origin")
+				if origin == "" {
+					return true
+				}
+				u, err := url.Parse(origin)
+				if err != nil {
+					return false
+				}
+				switch u.Hostname() {
+				case "127.0.0.1", "localhost", "::1":
+					return true
+				}
+				return false
+			},
 		},
 	}
 }

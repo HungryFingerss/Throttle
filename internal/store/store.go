@@ -15,16 +15,20 @@ import (
 )
 
 type stateFile struct {
-	Version  int            `json:"version"`
-	Sessions []core.Session `json:"sessions"`
+	Version  int              `json:"version"`
+	Sessions []core.Session   `json:"sessions"`
+	Offsets  map[string]int64 `json:"offsets,omitempty"`
 }
 
-// Save atomically writes sessions to path (temp file + rename).
-func Save(path string, sessions []core.Session) error {
+// Save atomically writes sessions AND per-file offsets to path (temp + rename).
+// Offsets are saved in full because a session spans multiple files (main
+// transcript + subagent files); persisting only per-session offsets would let a
+// restart re-parse subagent files and double-count.
+func Save(path string, sessions []core.Session, offsets map[string]int64) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
-	b, err := json.MarshalIndent(stateFile{Version: 1, Sessions: sessions}, "", "  ")
+	b, err := json.MarshalIndent(stateFile{Version: 1, Sessions: sessions, Offsets: offsets}, "", "  ")
 	if err != nil {
 		return err
 	}
@@ -35,20 +39,20 @@ func Save(path string, sessions []core.Session) error {
 	return os.Rename(tmp, path)
 }
 
-// Load reads persisted sessions. A missing file yields an empty slice and no
-// error (first run). A corrupt file yields an error; callers may choose to
-// start fresh rather than fail.
-func Load(path string) ([]core.Session, error) {
+// Load reads persisted sessions and per-file offsets. A missing file yields
+// empty values and no error (first run). A corrupt file yields an error;
+// callers may choose to start fresh rather than fail.
+func Load(path string) ([]core.Session, map[string]int64, error) {
 	b, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return nil, nil
+			return nil, nil, nil
 		}
-		return nil, err
+		return nil, nil, err
 	}
 	var sf stateFile
 	if err := json.Unmarshal(b, &sf); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return sf.Sessions, nil
+	return sf.Sessions, sf.Offsets, nil
 }

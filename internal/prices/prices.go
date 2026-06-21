@@ -118,29 +118,59 @@ func (t *Table) Lookup(model string) (Price, bool) {
 		return p, true
 	}
 
-	// Longest shared-prefix match: pick the listed model that shares the most
-	// leading characters with the requested one (same family/version line).
-	var best string
-	var bestLen int
-	for k := range t.m {
-		n := commonPrefixLen(key, k)
-		// require a meaningful family match, not just "g" or "c"
-		if n >= 6 && n > bestLen {
-			bestLen, best = n, k
+	// 1) Trim trailing "-seg"/".seg" components and exact-match the shorter base,
+	//    so gpt-5-codex-2025-01 → gpt-5-codex → gpt-5 (whichever is listed). This
+	//    resolves to the real family/variant, never an unrelated sibling.
+	base := key
+	for {
+		i := strings.LastIndexAny(base, "-.")
+		if i <= 0 {
+			break
+		}
+		base = base[:i]
+		if p, ok := t.m[base]; ok {
+			return p, true
 		}
 	}
-	if best != "" {
-		return t.m[best], true
+
+	// 2) Version-drift sibling: same family+tier with a NUMERIC final segment on
+	//    both (claude-sonnet-4-6 ↔ claude-sonnet-4-5 when only one is listed). A
+	//    non-numeric final segment denotes a distinct variant (gpt-5-codex vs
+	//    gpt-5-mini) and must never be matched this way.
+	if stem, last, ok := splitLastSeg(key); ok && isNumericSeg(last) {
+		var best string
+		for k := range t.m {
+			if s2, l2, ok2 := splitLastSeg(k); ok2 && s2 == stem && isNumericSeg(l2) && len(k) > len(best) {
+				best = k
+			}
+		}
+		if best != "" {
+			return t.m[best], true
+		}
 	}
 	return Price{}, false
 }
 
-func commonPrefixLen(a, b string) int {
-	n := 0
-	for n < len(a) && n < len(b) && a[n] == b[n] {
-		n++
+// splitLastSeg splits a model key on its final '-' or '.' separator.
+func splitLastSeg(s string) (stem, last string, ok bool) {
+	i := strings.LastIndexAny(s, "-.")
+	if i <= 0 || i == len(s)-1 {
+		return "", "", false
 	}
-	return n
+	return s[:i], s[i+1:], true
+}
+
+// isNumericSeg reports whether a segment is all digits (i.e. a version number).
+func isNumericSeg(s string) bool {
+	if s == "" {
+		return false
+	}
+	for _, c := range s {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
 }
 
 // Cost computes the USD cost of a normalized token count for a model. The bool

@@ -157,15 +157,23 @@ func (t *Tracker) HandlePath(path string) {
 			id = fileID
 		}
 		s := ensure(id)
-		s.ByteOffset = res.NewOffset
+		// Byte offsets are tracked per file in t.offsets; only the main
+		// transcript drives the session's headline FilePath/ByteOffset (a
+		// session spans the main file PLUS its subagent files).
+		if ev.SubagentID == "" {
+			s.ByteOffset = res.NewOffset
+			s.FilePath = path
+		}
 		if s.Mode == "" || s.Mode == core.ModeUnknown {
 			s.Mode = t.modeFor(a)
 		}
-		if ev.ProjectPath != "" {
+		if ev.ProjectPath != "" && ev.SubagentID == "" {
 			s.ProjectPath = ev.ProjectPath
 		}
 
-		// Subagent sessions replay parent history (Codex 91× trap): never count.
+		// Codex-style replay subagent SESSIONS are excluded entirely (the 91×
+		// trap). Claude subagents are NOT this — they arrive as SubagentID-tagged
+		// events and ARE counted (folded into the parent below).
 		if s.IsSubagent {
 			continue
 		}
@@ -182,17 +190,24 @@ func (t *Tracker) HandlePath(path string) {
 		if model == "" {
 			model = s.Model
 		}
-		s.Tokens = s.Tokens.Add(ev.Tokens)
+		var addCost float64
 		if ev.HasCostOverride {
-			s.CostUSD += ev.CostOverride // adapter supplied cost (e.g. Aider)
+			addCost = ev.CostOverride // adapter supplied cost (e.g. Aider)
 		} else {
-			cost, est := t.prices.Cost(ev.Tokens, model)
-			s.CostUSD += cost
+			c, est := t.prices.Cost(ev.Tokens, model)
+			addCost = c
 			if est {
 				s.Estimated = true
 			}
 		}
-		if model != "" {
+		s.Tokens = s.Tokens.Add(ev.Tokens)
+		s.CostUSD += addCost
+		if ev.SubagentID != "" {
+			// Counted into the parent total above; also itemize per (subagent,
+			// day) for the dashboard breakdown. Subagents do NOT change the
+			// session's displayed (main-agent) model.
+			recordSubagent(s, ev, addCost)
+		} else if model != "" {
 			s.Model = model
 		}
 		if !ev.Timestamp.IsZero() {
@@ -309,6 +324,60 @@ func (t *Tracker) Import(sessions []core.Session) {
 			t.offsets[s.FilePath] = s.ByteOffset
 		}
 	}
+}
+
+// ExportOffsets returns a copy of every file's byte offset, for persistence.
+// A session spans multiple files (main transcript + subagent files), so these
+// must be saved in full or a restart would re-parse subagent files and
+// double-count their spend.
+func (t *Tracker) ExportOffsets() map[string]int64 {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	out := make(map[string]int64, len(t.offsets))
+	for k, v := range t.offsets {
+		out[k] = v
+	}
+	return out
+}
+
+// ImportOffsets restores persisted per-file byte offsets (max-wins so we never
+// rewind past already-counted bytes).
+func (t *Tracker) ImportOffsets(m map[string]int64) {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+	for k, v := range m {
+		if v > t.offsets[k] {
+			t.offsets[k] = v
+		}
+	}
+}
+
+// recordSubagent itemizes a subagent's usage on its day for the dashboard
+// breakdown. The same tokens/cost are already folded into the parent total.
+func recordSubagent(s *core.Session, ev core.UsageEvent, cost float64) {
+	day := ""
+	if !ev.Timestamp.IsZero() {
+		day = ev.Timestamp.Format("2006-01-02")
+	}
+	for i := range s.Subagents {
+		e := &s.Subagents[i]
+		if e.ID == ev.SubagentID && e.Day == day {
+			e.Tokens = e.Tokens.Add(ev.Tokens)
+			e.CostUSD += cost
+			if ev.Model != "" {
+				e.Model = ev.Model
+			}
+			return
+		}
+	}
+	s.Subagents = append(s.Subagents, core.SubagentUsage{
+		ID:      ev.SubagentID,
+		Day:     day,
+		Model:   ev.Model,
+		Tokens:  ev.Tokens,
+		CostUSD: cost,
+		Compact: ev.SubagentCompact,
+	})
 }
 
 // SetStop sets (or clears) a session's manual stop flag. When stopped, the

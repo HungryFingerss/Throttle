@@ -26,10 +26,26 @@ function desiredGroups(hookCmd) {
 }
 
 function readJSON(file) {
+  let text;
   try {
-    return JSON.parse(fs.readFileSync(file, "utf8"));
-  } catch (_) {
-    return {};
+    text = fs.readFileSync(file, "utf8");
+  } catch (e) {
+    if (e.code === "ENOENT") return {}; // no file yet → fresh install
+    throw e; // permission/IO error → surface it; never assume empty
+  }
+  try {
+    return JSON.parse(text);
+  } catch (e) {
+    // The file EXISTS but isn't valid JSON. Overwriting it would wipe the user's
+    // settings (permissions, env, plugins, their own hooks). Back it up and abort.
+    const bak = file + ".throttle-bak";
+    try { fs.copyFileSync(file, bak); } catch (_) {}
+    const err = new Error(
+      `Refusing to modify ${file}: it is not valid JSON (${e.message}). ` +
+      `A backup was written to ${bak}. Fix the JSON, then re-run.`
+    );
+    err.code = "THROTTLE_UNPARSEABLE_SETTINGS";
+    throw err;
   }
 }
 

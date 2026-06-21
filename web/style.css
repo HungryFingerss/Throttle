@@ -108,3 +108,30 @@ tbody tr:hover { background: #1b1f27; }
   border-radius: 6px; padding: 8px 14px; cursor: pointer; white-space: nowrap;
 }
 .actions { display: flex; gap: 6px; }
+
+/* Subagent accordion */
+.subtoggle {
+  background: transparent; border: 1px solid var(--line); color: var(--muted);
+  border-radius: 999px; padding: 1px 8px; font-size: 11px; cursor: pointer;
+  margin-left: 6px; white-space: nowrap; font-variant-numeric: tabular-nums;
+}
+.subtoggle:hover { border-color: var(--accent); color: var(--text); }
+.subrow td { padding: 0 12px 10px 12px; border-bottom: 1px solid var(--line); }
+.subpanel {
+  background: #0d0f14; border: 1px solid var(--line); border-radius: 8px;
+  padding: 8px 12px; margin-left: 24px;
+}
+.subday { padding: 4px 0; }
+.subday + .subday { border-top: 1px dashed var(--line); }
+.subday-h {
+  color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .5px;
+  padding: 4px 0;
+}
+.subitem {
+  display: grid; grid-template-columns: 160px 1fr auto auto; gap: 14px;
+  align-items: center; padding: 3px 0; font-size: 12px;
+}
+.subid { font-family: ui-monospace, Consolas, monospace; color: #c8b6ff; }
+.submodel { color: var(--muted); }
+.subtok { text-align: right; color: var(--text); font-variant-numeric: tabular-nums; }
+.subcost { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; }
