@@ -28,9 +28,10 @@ function banner(url) {
     const cmd = (sub, desc) =>
       "    npx @hungryfingerss/throttle " + sub.padEnd(10) + gray("— " + desc);
     out += "\n  manage it anytime:\n" +
-      cmd("status", "what's running and installed") + "\n" +
-      cmd("stop", "pause it (your agents keep working)") + "\n" +
-      cmd("uninstall", "remove hooks and stop the daemon") + "\n";
+      cmd("status", "is it running? what's installed?") + "\n" +
+      cmd("stop", "pause it (agents keep working, unmonitored)") + "\n" +
+      cmd("start", "resume after a stop") + "\n" +
+      cmd("uninstall", "remove for good (unwire hooks + stop)") + "\n";
   }
   return out;
 }
