@@ -1,6 +1,6 @@
 {
   "name": "@hungryfingerss/throttle",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Local, no-proxy control layer for AI coding agents: live spend dashboard, hard caps/kill-switch, and compaction-proof rules.",
   "bin": {
     "throttle": "bin/throttle.js"

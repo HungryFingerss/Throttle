@@ -21,8 +21,17 @@ function banner(url) {
     "     ██║   ██║  ██║██║  ██║╚██████╔╝   ██║      ██║   ███████╗███████╗",
     "     ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝ ╚═════╝    ╚═╝      ╚═╝   ╚══════╝╚══════╝",
   ].join("\n");
+  const gray = (s) => `\x1b[90m${s}\x1b[0m`;
   let out = "\n" + cyan(art) + "\n\n  \x1b[1mlocal control layer for your AI coding agents\x1b[0m\n";
-  if (url) out += "\n  Throttle is live at " + cyan(url) + "\n";
+  if (url) {
+    out += "\n  Throttle is live at " + cyan(url) + "\n";
+    const cmd = (sub, desc) =>
+      "    npx @hungryfingerss/throttle " + sub.padEnd(10) + gray("— " + desc);
+    out += "\n  manage it anytime:\n" +
+      cmd("status", "what's running and installed") + "\n" +
+      cmd("stop", "pause it (your agents keep working)") + "\n" +
+      cmd("uninstall", "remove hooks and stop the daemon") + "\n";
+  }
   return out;
 }
 
@@ -99,7 +108,7 @@ async function cmdInit(args, log) {
 
   if (!binSrc) {
     // No local binaries → fetch the ones for this OS from the GitHub release.
-    binSrc = await ensureBinaries(require("../package.json").version, log);
+    binSrc = await ensureBinaries(log);
   }
   copyBinaries(binSrc, P.binDir());
   log(`  installed binaries → ${P.binDir()}`);

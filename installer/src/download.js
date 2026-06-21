@@ -9,6 +9,11 @@ const https = require("https");
 const P = require("./paths");
 
 const REPO = "HungryFingerss/Throttle";
+// The GitHub Release that holds the prebuilt binaries. Decoupled from the npm
+// package version on purpose: installer-only releases (banner, copy, JS bugfixes)
+// don't need a binary rebuild — bump this only when the daemon/hook binaries
+// themselves change, and tag a matching release.
+const BINARY_TAG = "v0.1.0";
 
 // Node platform/arch → the Go GOOS/GOARCH used in the release asset names.
 function target() {
@@ -47,7 +52,7 @@ function download(url, dest, redirects = 0) {
 // ensureBinaries makes sure both binaries for this OS/arch exist under
 // dist/<platform>-<arch>/, downloading them from the matching GitHub Release if
 // missing. Returns that directory — a valid --bin-src for copyBinaries().
-async function ensureBinaries(version, log = () => {}) {
+async function ensureBinaries(log = () => {}) {
   const t = target();
   if (!t.goos || !t.goarch) {
     throw new Error(`unsupported platform ${process.platform}/${process.arch} — build from source`);
@@ -58,7 +63,7 @@ async function ensureBinaries(version, log = () => {}) {
 
   fs.mkdirSync(dir, { recursive: true });
   for (const bin of ["throttled", "throttle-hook"]) {
-    const url = `https://github.com/${REPO}/releases/download/v${version}/${assetName(bin, t)}`;
+    const url = `https://github.com/${REPO}/releases/download/${BINARY_TAG}/${assetName(bin, t)}`;
     const dest = path.join(dir, P.exe(bin));
     log(`  downloading ${bin} for ${t.goos}/${t.goarch} …`);
     await download(url, dest);
